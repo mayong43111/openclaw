@@ -1,0 +1,530 @@
+---
+# deploy-vm.yml - Create VM from OpenClaw image, configure gateway + AOAI, register App Gateway
+#
+# Usage:
+#   make vm-deploy VM_NAME=01 VM_PASSWORD='OpenClaw@2026!'
+#   make vm-deploy VM_NAME=02 VM_PASSWORD='OpenClaw@2026!'
+#   make vm-list
+#
+# Required extra vars:
+#   vm_admin_password  - VM admin password
+#   vm_name            - Full VM name (e.g. vm-ymms-openclaw-01)
+#   aoai_api_key       - Azure OpenAI API key
+#
+# Optional extra vars (override group_vars/all.yml):
+#   aoai_endpoint      - AOAI endpoint (default: aif-auto-gen-chat.openai.azure.com)
+#   aoai_deployment    - AOAI deployment name (default: gpt-5.4)
+
+# ═══════════════════════════════════════════════════════════
+# Play 1: Create Azure resources (NIC + VM) and register App Gateway
+# ═══════════════════════════════════════════════════════════
+- name: Create OpenClaw VM on Azure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - vm_admin_password | length > 0
+          - vm_name | length > 0
+        fail_msg: "vm_admin_password and vm_name must be set"
+
+    - name: Get image ID
+      ansible.builtin.command:
+        cmd: >
+          az image show
+            --resource-group {{ image_rg }}
+            --name {{ image_name }}
+            --query id -o tsv
+      register: image_id_result
+      changed_when: false
+
+    - name: Validate AOAI API key
+      ansible.builtin.assert:
+        that:
+          - aoai_api_key | length > 0
+        fail_msg: "aoai_api_key must be set (-e aoai_api_key=xxx)"
+
+    - name: Check if NIC exists
+      ansible.builtin.command:
+        cmd: >
+          az network nic show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}-nic
+            --query id -o tsv
+      register: nic_check
+      changed_when: false
+      failed_when: false
+
+    - name: Create NIC in VM subnet
+      ansible.builtin.command:
+        cmd: >
+          az network nic create
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}-nic
+            --vnet-name {{ vnet_name }}
+            --subnet {{ vm_subnet }}
+            --output json
+      register: nic_result
+      changed_when: "'provisioningState' in nic_result.stdout"
+      when: nic_check.rc != 0
+
+    - name: Set short computer name (max 15 chars for Windows)
+      ansible.builtin.set_fact:
+        computer_name: "{{ (prefix + '-oc-' + vm_name.split('-')[-1])[:15] }}"
+
+    - name: Extract VM short name (e.g. '01' from 'vm-ymms-openclaw-01')
+      ansible.builtin.set_fact:
+        vm_short_name: "{{ vm_name.split('-')[-1] }}"
+
+    - name: Check if VM exists
+      ansible.builtin.command:
+        cmd: >
+          az vm show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --query id -o tsv
+      register: vm_check
+      changed_when: false
+      failed_when: false
+
+    - name: Create VM from image
+      ansible.builtin.command:
+        cmd: >
+          az vm create
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --computer-name {{ computer_name }}
+            --image {{ image_id_result.stdout | trim }}
+            --size {{ vm_size }}
+            --admin-username {{ vm_admin_user }}
+            --admin-password {{ vm_admin_password }}
+            --nics {{ vm_name }}-nic
+            --public-ip-address ""
+            --output json
+      register: vm_result
+      changed_when: "'provisioningState' in vm_result.stdout"
+      when: vm_check.rc != 0
+
+    - name: Get VM private IP
+      ansible.builtin.command:
+        cmd: >
+          az vm show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --show-details
+            --query privateIps -o tsv
+      register: vm_ip_result
+      changed_when: false
+
+    - name: Set VM IP fact
+      ansible.builtin.set_fact:
+        vm_private_ip: "{{ vm_ip_result.stdout | trim }}"
+
+    - name: Get App Gateway public IP
+      ansible.builtin.command:
+        cmd: >
+          az network public-ip show
+            --resource-group {{ infra_rg }}
+            --name pip-{{ prefix }}-appgw
+            --query ipAddress -o tsv
+      register: appgw_pip_result
+      changed_when: false
+
+    - name: Set App Gateway IP fact
+      ansible.builtin.set_fact:
+        appgw_public_ip: "{{ appgw_pip_result.stdout | trim }}"
+
+    - name: Display VM info
+      ansible.builtin.debug:
+        msg: |
+          VM Created: {{ vm_name }}
+          Private IP: {{ vm_private_ip }}
+          Computer:   {{ computer_name }}
+          AOAI:       {{ aoai_endpoint }}/openai/deployments/{{ aoai_deployment }}
+
+    - name: Add VM to in-memory inventory
+      ansible.builtin.add_host:
+        name: "{{ vm_private_ip }}"
+        groups: openclaw_vm
+        ansible_user: "{{ vm_admin_user }}"
+        ansible_password: "{{ vm_admin_password }}"
+        ansible_connection: ssh
+        ansible_shell_type: powershell
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        vm_name_fact: "{{ vm_name }}"
+        vm_admin_user_fact: "{{ vm_admin_user }}"
+        aoai_endpoint_fact: "{{ aoai_endpoint }}"
+        aoai_deployment_fact: "{{ aoai_deployment }}"
+        aoai_api_key_fact: "{{ aoai_api_key }}"
+        appgw_public_ip_fact: "{{ appgw_public_ip }}"
+
+    # --- Per-VM App Gateway routing (backend pool + listener + rule) ---
+    - name: Create per-VM backend pool (pool-{{ vm_short_name }})
+      ansible.builtin.command:
+        cmd: >
+          az network application-gateway address-pool create
+            --resource-group {{ infra_rg }}
+            --gateway-name {{ appgw_name }}
+            --name pool-{{ vm_short_name }}
+            --servers {{ vm_private_ip }}
+            --output json
+      register: pool_result
+      changed_when: "'provisioningState' in pool_result.stdout"
+
+    - name: Create per-VM HTTPS listener (listener-{{ vm_short_name }})
+      ansible.builtin.command:
+        cmd: >
+          az network application-gateway http-listener create
+            --resource-group {{ infra_rg }}
+            --gateway-name {{ appgw_name }}
+            --name listener-{{ vm_short_name }}
+            --frontend-port https-port
+            --frontend-ip appgw-frontend-ip
+            --ssl-cert wildcard-nip-io
+            --host-name {{ vm_name }}.{{ appgw_public_ip }}.nip.io
+            --output json
+      register: listener_result
+      changed_when: "'provisioningState' in listener_result.stdout"
+
+    - name: Create per-VM routing rule (rule-{{ vm_short_name }})
+      ansible.builtin.command:
+        cmd: >
+          az network application-gateway rule create
+            --resource-group {{ infra_rg }}
+            --gateway-name {{ appgw_name }}
+            --name rule-{{ vm_short_name }}
+            --rule-type Basic
+            --priority {{ 110 + (vm_short_name | int - 1) * 10 }}
+            --http-listener listener-{{ vm_short_name }}
+            --address-pool pool-{{ vm_short_name }}
+            --http-settings openclaw-backend-settings
+            --output json
+      register: rule_result
+      changed_when: "'provisioningState' in rule_result.stdout"
+
+# ═══════════════════════════════════════════════════════════
+# Play 2: Configure OpenClaw Gateway + AOAI on VM via SSH
+# ═══════════════════════════════════════════════════════════
+- name: Configure OpenClaw Gateway
+  hosts: openclaw_vm
+  gather_facts: false
+
+  vars:
+    user_config_dir: 'C:\Users\{{ vm_admin_user_fact }}\.openclaw'
+    user_config_file: 'C:\Users\{{ vm_admin_user_fact }}\.openclaw\openclaw.json'
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Refresh PATH and check OpenClaw version
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw --version
+      register: version_check
+
+    - name: Display OpenClaw version
+      ansible.builtin.debug:
+        msg: "{{ version_check.stdout | trim }}"
+
+    # --- Gateway basic config ---
+    - name: Set gateway mode to local
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw config set gateway.mode local
+
+    - name: Configure Control UI origin fallback
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true
+      when: openclaw_origin_fallback | bool
+
+    - name: Disable device pairing requirement
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
+
+    # --- Azure OpenAI provider (API Key + # fragment trick) ---
+    # Merge AOAI config directly into openclaw.json (not settings.json).
+    - name: Merge AOAI provider config into openclaw.json
+      ansible.windows.win_shell: !unsafe |
+        $configPath = Join-Path $env:USERPROFILE ".openclaw\openclaw.json"
+        if (-not (Test-Path $configPath)) {
+          Write-Error "openclaw.json not found at $configPath"
+          exit 1
+        }
+        $config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+        if (-not $config.models) {
+          $config | Add-Member -NotePropertyName 'models' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        if (-not $config.models.providers) {
+          $config.models | Add-Member -NotePropertyName 'providers' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        $config.models | Add-Member -NotePropertyName 'mode' -NotePropertyValue 'merge' -Force
+
+        $provider = @{
+          baseUrl = "https://$env:AOAI_ENDPOINT/openai/deployments/$env:AOAI_DEPLOYMENT/chat/completions?api-version=2024-10-21#"
+          api = "openai-completions"
+          apiKey = $env:AOAI_API_KEY
+          models = @(
+            @{
+              id = $env:AOAI_DEPLOYMENT
+              name = "$($env:AOAI_DEPLOYMENT) (Azure OpenAI)"
+              contextWindow = 128000
+              maxTokens = 16384
+              input = @("text")
+              cost = @{ input = 0; output = 0; cacheRead = 0; cacheWrite = 0 }
+              reasoning = $false
+            }
+          )
+        }
+        $config.models.providers | Add-Member -NotePropertyName 'auto-gen-chat' -NotePropertyValue $provider -Force
+
+        if (-not $config.agents) {
+          $config | Add-Member -NotePropertyName 'agents' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        if (-not $config.agents.defaults) {
+          $config.agents | Add-Member -NotePropertyName 'defaults' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        $config.agents.defaults | Add-Member -NotePropertyName 'model' -NotePropertyValue @{ primary = "auto-gen-chat/$($env:AOAI_DEPLOYMENT)" } -Force
+        $config.agents.defaults | Add-Member -NotePropertyName 'models' -NotePropertyValue @{ "auto-gen-chat/$($env:AOAI_DEPLOYMENT)" = @{} } -Force
+
+        $json = $config | ConvertTo-Json -Depth 20
+        Set-Content $configPath -Value $json -Encoding UTF8
+        Write-Output "AOAI provider merged into $configPath"
+      environment:
+        AOAI_ENDPOINT: "{{ aoai_endpoint_fact }}"
+        AOAI_DEPLOYMENT: "{{ aoai_deployment_fact }}"
+        AOAI_API_KEY: "{{ aoai_api_key_fact }}"
+      register: aoai_setup_result
+      no_log: true
+
+    - name: Display AOAI setup result
+      ansible.builtin.debug:
+        msg: "AOAI configured: API Key + # trick, model={{ aoai_deployment_fact }}"
+
+    # --- Configure launcher and service ---
+    # Packer image ships with --bind loopback; must rewrite to --bind lan
+    # so App Gateway can reach port 18789.
+    - name: Write gateway launcher script (bind to LAN)
+      ansible.windows.win_shell: !unsafe |
+        $launcher = @"
+        @echo off
+        set PATH=C:\Program Files\nodejs;C:\openclaw;C:\Program Files\Git\bin;%PATH%
+        openclaw gateway run --bind $env:GW_BIND --port $env:GW_PORT
+        "@
+        Set-Content "C:\openclaw-gateway.cmd" $launcher -Encoding ASCII
+      environment:
+        GW_BIND: "{{ openclaw_bind }}"
+        GW_PORT: "{{ openclaw_port }}"
+
+    # --- Switch from NSSM service (SYSTEM) to Scheduled Task (user session) ---
+    # SYSTEM has no desktop; running as user allows browser launch.
+    - name: Disable NSSM service (Packer image ships with it)
+      ansible.windows.win_shell: !unsafe |
+        Stop-Service OpenClawGateway -Force -ErrorAction SilentlyContinue
+        sc.exe config OpenClawGateway start= disabled
+        Write-Output "NSSM service disabled"
+
+    - name: Enable auto-logon for {{ vm_admin_user_fact }}
+      ansible.windows.win_shell: !unsafe |
+        $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        Set-ItemProperty -Path $regPath -Name 'AutoAdminLogon' -Value '1'
+        Set-ItemProperty -Path $regPath -Name 'DefaultUserName' -Value $env:LOGON_USER
+        Set-ItemProperty -Path $regPath -Name 'DefaultPassword' -Value $env:LOGON_PASS
+        Write-Output "Auto-logon enabled"
+      environment:
+        LOGON_USER: "{{ vm_admin_user_fact }}"
+        LOGON_PASS: "{{ ansible_password }}"
+      no_log: true
+
+    - name: Create scheduled task for gateway (interactive desktop session)
+      ansible.windows.win_shell: !unsafe |
+        Unregister-ScheduledTask -TaskName 'OpenClawGateway' -Confirm:$false -ErrorAction SilentlyContinue
+        $action = New-ScheduledTaskAction -Execute 'C:\openclaw-gateway.cmd'
+        $trigger = New-ScheduledTaskTrigger -AtLogon -User $env:TASK_USER
+        $principal = New-ScheduledTaskPrincipal -UserId $env:TASK_USER -LogonType Interactive -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 365)
+        Register-ScheduledTask -TaskName 'OpenClawGateway' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+        Write-Output "Scheduled task created (Interactive + AtLogon)"
+      environment:
+        TASK_USER: "{{ vm_admin_user_fact }}"
+
+    # Reboot to activate auto-logon → console session → AtLogon trigger → gateway starts in desktop
+    - name: Reboot VM to activate auto-logon + gateway
+      ansible.windows.win_reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 30
+
+    - name: Wait for gateway to be ready
+      ansible.windows.win_shell: !unsafe |
+        $retries = 20
+        for ($i = 0; $i -lt $retries; $i++) {
+          try {
+            $resp = Invoke-WebRequest -Uri "http://localhost:$env:GW_PORT/" -UseBasicParsing -TimeoutSec 3 -ErrorAction SilentlyContinue
+            if ($resp.StatusCode -eq 200) {
+              Write-Output "Gateway is running on port $env:GW_PORT"
+              exit 0
+            }
+          } catch {}
+          Start-Sleep -Seconds 3
+        }
+        Write-Error "Gateway did not start in 60s"
+        exit 1
+      environment:
+        GW_PORT: "{{ openclaw_port }}"
+      register: gw_status
+
+    - name: Get gateway token (from user profile config)
+      ansible.windows.win_shell: !unsafe |
+        $configFile = $env:CONFIG_FILE
+        $retries = 20
+        for ($i = 0; $i -lt $retries; $i++) {
+          if (Test-Path $configFile) {
+            $cfg = Get-Content $configFile -Raw | ConvertFrom-Json
+            $token = $cfg.gateway.auth.token
+            if ($token) {
+              Write-Output $token
+              exit 0
+            }
+          }
+          Start-Sleep -Seconds 3
+        }
+        Write-Error "Token not found after 60s"
+        exit 1
+      environment:
+        CONFIG_FILE: "{{ user_config_file }}"
+      register: token_result
+
+    - name: Display connection info
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════╗
+          ║  OpenClaw Gateway Ready                         ║
+          ╠══════════════════════════════════════════════════╣
+          ║  VM:      {{ vm_name_fact }}
+          ║  IP:      {{ inventory_hostname }}
+          ║  Port:    {{ openclaw_port }}
+          ║  Token:   {{ token_result.stdout | trim }}
+          ║  AOAI:    {{ aoai_endpoint_fact }}
+          ║  Auth:    API Key (static)
+          ║  Model:   auto-gen-chat/{{ aoai_deployment_fact }}
+          ║  URL:     https://{{ vm_name_fact }}.{{ appgw_public_ip_fact }}.nip.io
+          ╚══════════════════════════════════════════════════╝
+
+    - name: Set deployment record
+      ansible.builtin.set_fact:
+        vm_record:
+          name: "{{ vm_name_fact }}"
+          ip: "{{ inventory_hostname }}"
+          port: "{{ openclaw_port }}"
+          token: "{{ token_result.stdout | trim }}"
+          url: "https://{{ vm_name_fact }}.{{ appgw_public_ip_fact }}.nip.io"
+          admin_user: "{{ vm_admin_user_fact }}"
+          model: "auto-gen-chat/{{ aoai_deployment_fact }}"
+          deployed_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+# ═══════════════════════════════════════════════════════════
+# Play 3: Save VM record to local registry
+# ═══════════════════════════════════════════════════════════
+- name: Save VM record to local registry
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Get deployed VM info from previous play
+      ansible.builtin.set_fact:
+        new_vm: "{{ hostvars[groups['openclaw_vm'][0]].vm_record }}"
+
+    - name: Ensure vms.yml exists
+      ansible.builtin.copy:
+        content: "# OpenClaw VM Registry\n# Auto-generated by deploy-vm.yml\n---\nvms: []\n"
+        dest: "{{ playbook_dir }}/vms.yml"
+        force: false
+        mode: "0600"
+
+    - name: Load existing registry
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/vms.yml"
+      register: vms_file
+
+    - name: Parse registry
+      ansible.builtin.set_fact:
+        vm_registry: "{{ vms_file.content | b64decode | from_yaml }}"
+
+    - name: Remove old entry for same VM name (if re-deploying)
+      ansible.builtin.set_fact:
+        vm_list_clean: "{{ vm_registry.vms | rejectattr('name', 'equalto', new_vm.name) | list }}"
+
+    - name: Append new VM record
+      ansible.builtin.set_fact:
+        vm_list_updated: "{{ vm_list_clean + [new_vm] }}"
+
+    - name: Write updated registry
+      ansible.builtin.copy:
+        content: |
+          # OpenClaw VM Registry
+          # Auto-generated by deploy-vm.yml
+          ---
+          vms:
+          {% for vm in vm_list_updated %}
+            - name: "{{ vm.name }}"
+              ip: "{{ vm.ip }}"
+              port: {{ vm.port }}
+              token: "{{ vm.token }}"
+              url: "{{ vm.url }}"
+              admin_user: "{{ vm.admin_user }}"
+              model: "{{ vm.model }}"
+              deployed_at: "{{ vm.deployed_at }}"
+          {% endfor %}
+        dest: "{{ playbook_dir }}/vms.yml"
+        mode: "0600"
+
+    - name: Generate host_vars file for new VM
+      ansible.builtin.copy:
+        content: |
+          ---
+          # Auto-generated by deploy-vm.yml
+          ansible_host: "{{ new_vm.ip }}"
+          ansible_user: "{{ new_vm.admin_user }}"
+          vm_name: "{{ new_vm.name }}"
+          openclaw_token: "{{ new_vm.token }}"
+          deployed_at: "{{ new_vm.deployed_at }}"
+        dest: "{{ playbook_dir }}/inventory/host_vars/{{ new_vm.name }}.yml"
+        mode: "0600"
+
+    - name: Rebuild hosts.yml with all VMs
+      ansible.builtin.copy:
+        content: |
+          all:
+            children:
+              openclaw_vm:
+                vars:
+                  ansible_connection: ssh
+                  ansible_shell_type: powershell
+                  ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+                hosts:
+          {% for vm in vm_list_updated %}
+                  {{ vm.name }}:
+          {% endfor %}
+        dest: "{{ playbook_dir }}/inventory/hosts.yml"
+        mode: "0644"
+
+    - name: Final summary
+      ansible.builtin.debug:
+        msg: |
+          ═══════════════════════════════════════════════════
+           Deployment Complete
+          ═══════════════════════════════════════════════════
+           VM:    {{ new_vm.name }}
+           URL:   {{ new_vm.url }}
+           Token: {{ new_vm.token }}
+           Model: {{ new_vm.model }}
+           VMs:   {{ vm_list_updated | length }} total
+          ═══════════════════════════════════════════════════

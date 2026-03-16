@@ -1,0 +1,210 @@
+---
+# configure-vm.yml - Reconfigure OpenClaw Gateway on existing VM(s)
+# Uses inventory file for target hosts.
+#
+# Usage:
+#   ansible-playbook configure-vm.yml -i inventory/ -e aoai_api_key=xxx
+#   make vm-configure AOAI_API_KEY=xxx
+#
+# Required extra vars:
+#   aoai_api_key       - Azure OpenAI API key
+#
+# Optional extra vars (override group_vars/all.yml):
+#   aoai_endpoint      - AOAI endpoint (default: aif-auto-gen-chat.openai.azure.com)
+#   aoai_deployment    - AOAI deployment name (default: gpt-5.4)
+
+- name: Configure OpenClaw Gateway
+  hosts: openclaw_vm
+  gather_facts: false
+
+  vars:
+    user_config_file: 'C:\Users\{{ ansible_user }}\.openclaw\openclaw.json'
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Refresh PATH and check version
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw --version
+      register: version_check
+
+    - name: Display OpenClaw version
+      ansible.builtin.debug:
+        msg: "{{ version_check.stdout | trim }}"
+
+    - name: Set gateway mode to local
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw config set gateway.mode local
+
+    - name: Configure Control UI origin fallback
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true
+      when: openclaw_origin_fallback | bool
+
+    - name: Disable device pairing requirement
+      ansible.windows.win_shell: !unsafe |
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
+
+    # --- Azure OpenAI provider (API Key + # fragment trick) ---
+    - name: Merge AOAI provider config into openclaw.json
+      ansible.windows.win_shell: !unsafe |
+        $configPath = Join-Path $env:USERPROFILE ".openclaw\openclaw.json"
+        if (-not (Test-Path $configPath)) {
+          Write-Error "openclaw.json not found at $configPath"
+          exit 1
+        }
+        $config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+        if (-not $config.models) {
+          $config | Add-Member -NotePropertyName 'models' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        if (-not $config.models.providers) {
+          $config.models | Add-Member -NotePropertyName 'providers' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        $config.models | Add-Member -NotePropertyName 'mode' -NotePropertyValue 'merge' -Force
+
+        $provider = @{
+          baseUrl = "https://$env:AOAI_ENDPOINT/openai/deployments/$env:AOAI_DEPLOYMENT/chat/completions?api-version=2024-10-21#"
+          api = "openai-completions"
+          apiKey = $env:AOAI_API_KEY
+          models = @(
+            @{
+              id = $env:AOAI_DEPLOYMENT
+              name = "$($env:AOAI_DEPLOYMENT) (Azure OpenAI)"
+              contextWindow = 128000
+              maxTokens = 16384
+              input = @("text")
+              cost = @{ input = 0; output = 0; cacheRead = 0; cacheWrite = 0 }
+              reasoning = $false
+            }
+          )
+        }
+        $config.models.providers | Add-Member -NotePropertyName 'auto-gen-chat' -NotePropertyValue $provider -Force
+
+        if (-not $config.agents) {
+          $config | Add-Member -NotePropertyName 'agents' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        if (-not $config.agents.defaults) {
+          $config.agents | Add-Member -NotePropertyName 'defaults' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+        $config.agents.defaults | Add-Member -NotePropertyName 'model' -NotePropertyValue @{ primary = "auto-gen-chat/$($env:AOAI_DEPLOYMENT)" } -Force
+        $config.agents.defaults | Add-Member -NotePropertyName 'models' -NotePropertyValue @{ "auto-gen-chat/$($env:AOAI_DEPLOYMENT)" = @{} } -Force
+
+        $json = $config | ConvertTo-Json -Depth 20
+        Set-Content $configPath -Value $json -Encoding UTF8
+        Write-Output "AOAI provider merged into $configPath"
+      environment:
+        AOAI_ENDPOINT: "{{ aoai_endpoint }}"
+        AOAI_DEPLOYMENT: "{{ aoai_deployment }}"
+        AOAI_API_KEY: "{{ aoai_api_key }}"
+      no_log: true
+
+    # --- Configure launcher and service ---
+    - name: Write gateway launcher script (bind to LAN)
+      ansible.windows.win_shell: !unsafe |
+        $launcher = @"
+        @echo off
+        set PATH=C:\Program Files\nodejs;C:\openclaw;C:\Program Files\Git\bin;%PATH%
+        openclaw gateway run --bind $env:GW_BIND --port $env:GW_PORT
+        "@
+        Set-Content "C:\openclaw-gateway.cmd" $launcher -Encoding ASCII
+      environment:
+        GW_BIND: "{{ openclaw_bind }}"
+        GW_PORT: "{{ openclaw_port }}"
+
+    # --- Switch from NSSM service to Scheduled Task (user session for browser) ---
+    - name: Disable NSSM service
+      ansible.windows.win_shell: !unsafe |
+        Stop-Service OpenClawGateway -Force -ErrorAction SilentlyContinue
+        sc.exe config OpenClawGateway start= disabled
+        Write-Output "NSSM service disabled"
+
+    - name: Enable auto-logon
+      ansible.windows.win_shell: !unsafe |
+        $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        Set-ItemProperty -Path $regPath -Name 'AutoAdminLogon' -Value '1'
+        Set-ItemProperty -Path $regPath -Name 'DefaultUserName' -Value $env:LOGON_USER
+        Set-ItemProperty -Path $regPath -Name 'DefaultPassword' -Value $env:LOGON_PASS
+        Write-Output "Auto-logon enabled"
+      environment:
+        LOGON_USER: "{{ ansible_user }}"
+        LOGON_PASS: "{{ ansible_password }}"
+      no_log: true
+
+    - name: Create scheduled task for gateway (interactive desktop session)
+      ansible.windows.win_shell: !unsafe |
+        Unregister-ScheduledTask -TaskName 'OpenClawGateway' -Confirm:$false -ErrorAction SilentlyContinue
+        $action = New-ScheduledTaskAction -Execute 'C:\openclaw-gateway.cmd'
+        $trigger = New-ScheduledTaskTrigger -AtLogon -User $env:TASK_USER
+        $principal = New-ScheduledTaskPrincipal -UserId $env:TASK_USER -LogonType Interactive -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 365)
+        Register-ScheduledTask -TaskName 'OpenClawGateway' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+        Write-Output "Scheduled task created (Interactive + AtLogon)"
+      environment:
+        TASK_USER: "{{ ansible_user }}"
+
+    - name: Reboot VM to activate auto-logon + gateway
+      ansible.windows.win_reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 30
+
+    - name: Wait for gateway to be ready
+      ansible.windows.win_shell: !unsafe |
+        $retries = 20
+        for ($i = 0; $i -lt $retries; $i++) {
+          try {
+            $resp = Invoke-WebRequest -Uri "http://localhost:$env:GW_PORT/" -UseBasicParsing -TimeoutSec 3 -ErrorAction SilentlyContinue
+            if ($resp.StatusCode -eq 200) {
+              Write-Output "Gateway is running on port $env:GW_PORT"
+              exit 0
+            }
+          } catch {}
+          Start-Sleep -Seconds 3
+        }
+        Write-Error "Gateway did not start in 60s"
+        exit 1
+      environment:
+        GW_PORT: "{{ openclaw_port }}"
+      register: gw_status
+
+    - name: Get gateway token (from user profile)
+      ansible.windows.win_shell: !unsafe |
+        $configFile = $env:CONFIG_FILE
+        $retries = 20
+        for ($i = 0; $i -lt $retries; $i++) {
+          if (Test-Path $configFile) {
+            $cfg = Get-Content $configFile -Raw | ConvertFrom-Json
+            $token = $cfg.gateway.auth.token
+            if ($token) {
+              Write-Output $token
+              exit 0
+            }
+          }
+          Start-Sleep -Seconds 3
+        }
+        Write-Error "Token not found after 60s"
+        exit 1
+      environment:
+        CONFIG_FILE: "{{ user_config_file }}"
+      register: token_result
+
+    - name: Display connection info
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════╗
+          ║  OpenClaw Gateway Ready                         ║
+          ╠══════════════════════════════════════════════════╣
+          ║  VM:      {{ vm_name | default(inventory_hostname) }}
+          ║  IP:      {{ inventory_hostname }}
+          ║  Port:    {{ openclaw_port }}
+          ║  Token:   {{ token_result.stdout | trim }}
+          ║  AOAI:    {{ aoai_endpoint }}
+          ║  Auth:    API Key (static)
+          ║  Model:   auto-gen-chat/{{ aoai_deployment }}
+          ╚══════════════════════════════════════════════════╝

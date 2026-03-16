@@ -1,0 +1,32 @@
+# Default variables for OpenClaw VM deployment
+# Override via .env -> Makefile -> ansible-playbook -e
+
+# Azure
+prefix: "ymms"
+location: "westus3"
+subscription_id: "25741150-3c69-49ef-b192-934816cf1782"
+
+# Resource naming
+infra_rg: "rg-{{ prefix }}-openclaw-infra"
+image_rg: "rg-{{ prefix }}-openclaw"
+vnet_name: "vnet-{{ prefix }}-openclaw"
+vm_subnet: "snet-vm"
+appgw_name: "appgw-{{ prefix }}-openclaw"
+
+# VM
+vm_name: "vm-{{ prefix }}-openclaw-01"
+vm_size: "Standard_D2s_v5"
+vm_admin_user: "azureuser"
+vm_admin_password: ""  # Must be set via -e or env
+ssh_public_key_path: "~/.ssh/id_rsa.pub"
+image_name: "openclaw-windows-2026.3.12"
+
+# OpenClaw
+openclaw_port: 18789
+openclaw_bind: "lan"
+openclaw_origin_fallback: true
+
+# Azure OpenAI
+aoai_endpoint: "aif-auto-gen-chat.openai.azure.com"
+aoai_deployment: "gpt-5.4"
+aoai_api_key: ""  # Must be set via -e aoai_api_key=xxx
