@@ -148,7 +148,7 @@
     - name: Add VM to in-memory inventory
       ansible.builtin.add_host:
         name: "{{ vm_private_ip }}"
-        groups: openclaw_vm
+        groups: openclaw_vm_new
         ansible_user: "{{ vm_admin_user }}"
         ansible_password: "{{ vm_admin_password }}"
         ansible_connection: ssh
@@ -189,7 +189,7 @@
 # Play 2: Configure OpenClaw Gateway + AOAI on VM via SSH
 # ═══════════════════════════════════════════════════════════
 - name: Configure OpenClaw Gateway
-  hosts: openclaw_vm
+  hosts: openclaw_vm_new
   gather_facts: false
   ignore_unreachable: true
 
