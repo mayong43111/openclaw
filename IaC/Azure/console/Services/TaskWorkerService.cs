@@ -152,7 +152,7 @@ public class TaskWorkerService : BackgroundService
         if (exitCode == 0)
         {
             _logger.LogInformation("deploy-vm.yml succeeded for {VmName}", task.VmName);
-            await UpdateTableFromAnsibleOutputAsync(task.VmName, output);
+            await UpdateTableFromVmsRegistryAsync(task.VmName);
             await _logService.AppendAsync(task.VmName, "create", $"[{DateTime.UtcNow:HH:mm:ss}] ✅ deploy-vm.yml succeeded", isFinal: true, exitCode: 0);
         }
         else
@@ -161,7 +161,7 @@ public class TaskWorkerService : BackgroundService
             if (output.Contains("Token:") && output.Contains("IP:"))
             {
                 _logger.LogWarning("deploy-vm.yml exited {ExitCode} but connection info present — treating as success for {VmName}", exitCode, task.VmName);
-                await UpdateTableFromAnsibleOutputAsync(task.VmName, output);
+                await UpdateTableFromVmsRegistryAsync(task.VmName);
                 await _logService.AppendAsync(task.VmName, "create", $"[{DateTime.UtcNow:HH:mm:ss}] ⚠️ deploy-vm.yml exited {exitCode} but VM info found — treating as success", isFinal: true, exitCode: exitCode);
             }
             else
@@ -369,34 +369,61 @@ public class TaskWorkerService : BackgroundService
     }
 
     /// <summary>
-    /// Parse VM connection info directly from Ansible stdout output.
-    /// This avoids dependency on ephemeral local files (host_vars, vms.yml)
-    /// which are lost when the container restarts.
-    ///
-    /// deploy-vm.yml prints a structured block like:
-    ///   ║  IP:      10.0.1.4
-    ///   ║  Token:   abc123...
-    ///   ║  URL:     https://vm-ymms-openclaw-11.20-38-7-158.nip.io
+    /// Read VM connection info from vms.yml written by deploy-vm.yml Play 3.
+    /// Within a single deploy session the file is freshly written and reliable.
+    /// Format (YAML):
+    ///   vms:
+    ///     - name: "vm-ymms-openclaw-13"
+    ///       ip: "10.0.1.4"
+    ///       port: 18789
+    ///       token: "abc123..."
+    ///       url: "https://vm-ymms-openclaw-13.20-38-7-158.nip.io"
+    ///       ...
     /// </summary>
-    private async Task UpdateTableFromAnsibleOutputAsync(string vmName, string output)
+    private async Task UpdateTableFromVmsRegistryAsync(string vmName)
     {
+        var vmsPath = Path.Combine(_ansibleDir, "vms.yml");
+        if (!File.Exists(vmsPath))
+        {
+            _logger.LogWarning("vms.yml not found at {Path} — cannot update VM record for {VmName}", vmsPath, vmName);
+            // Still mark as ready even without details
+            var fallback = await _table.GetAsync(vmName) ?? new VmRecord { RowKey = vmName };
+            fallback.Status = "ready";
+            await _table.UpsertAsync(fallback);
+            return;
+        }
+
+        var content = await File.ReadAllTextAsync(vmsPath);
         var vm = await _table.GetAsync(vmName) ?? new VmRecord { RowKey = vmName };
         vm.Status = "ready";
 
-        // Parse key-value pairs from the Ansible connection info block
-        foreach (var line in output.Split('\n'))
+        // Simple line-based YAML parsing for the target VM's block
+        var lines = content.Split('\n');
+        bool inTargetBlock = false;
+        foreach (var rawLine in lines)
         {
-            var trimmed = line.Trim().TrimStart('║').Trim();
-            if (trimmed.StartsWith("IP:", StringComparison.Ordinal))
-                vm.VmIp = trimmed["IP:".Length..].Trim();
-            else if (trimmed.StartsWith("Token:", StringComparison.Ordinal))
-                vm.Token = trimmed["Token:".Length..].Trim();
-            else if (trimmed.StartsWith("URL:", StringComparison.Ordinal))
-                vm.Url = trimmed["URL:".Length..].Trim();
+            var line = rawLine.Trim();
+            // Detect start of a VM entry: "- name: "vm-ymms-openclaw-13""
+            if (line.StartsWith("- name:", StringComparison.Ordinal))
+            {
+                var nameVal = line["- name:".Length..].Trim().Trim('"');
+                inTargetBlock = string.Equals(nameVal, vmName, StringComparison.Ordinal);
+                continue;
+            }
+            if (!inTargetBlock) continue;
+            // Next list item starts → stop
+            if (line.StartsWith("- ", StringComparison.Ordinal)) break;
+
+            if (line.StartsWith("ip:", StringComparison.Ordinal))
+                vm.VmIp = line["ip:".Length..].Trim().Trim('"');
+            else if (line.StartsWith("token:", StringComparison.Ordinal))
+                vm.Token = line["token:".Length..].Trim().Trim('"');
+            else if (line.StartsWith("url:", StringComparison.Ordinal))
+                vm.Url = line["url:".Length..].Trim().Trim('"');
         }
 
         if (string.IsNullOrEmpty(vm.VmIp))
-            _logger.LogWarning("Could not parse IP from Ansible output for {VmName}", vmName);
+            _logger.LogWarning("Could not find IP in vms.yml for {VmName}", vmName);
 
         await _table.UpsertAsync(vm);
     }
