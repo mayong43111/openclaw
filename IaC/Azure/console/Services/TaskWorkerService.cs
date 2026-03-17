@@ -396,6 +396,7 @@ public class TaskWorkerService : BackgroundService
         var content = await File.ReadAllTextAsync(vmsPath);
         var vm = await _table.GetAsync(vmName) ?? new VmRecord { RowKey = vmName };
         vm.Status = "ready";
+        vm.CompletedAt = DateTimeOffset.UtcNow;
 
         // Simple line-based YAML parsing for the target VM's block
         var lines = content.Split('\n');

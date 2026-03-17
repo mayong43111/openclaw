@@ -16,6 +16,7 @@ public class VmRecord : ITableEntity
     public string? VmIp { get; set; }
     public string? Token { get; set; }
     public string? Url { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
     public string? Error { get; set; }
     public string? Tag { get; set; }
 

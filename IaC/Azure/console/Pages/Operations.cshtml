@@ -90,6 +90,7 @@ else
                     <th>IP</th>
                     <th>URL</th>
                     <th>创建时间</th>
+                    <th>完成时间</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -123,6 +124,7 @@ else
                             }
                         </td>
                         <td>@(vm.CreatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                        <td>@(vm.CompletedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                         <td>
                             @if (vm.Status == "ready")
                             {

@@ -67,6 +67,10 @@
                 <th>创建时间</th>
                 <td>@(Model.Vm.CreatedAt?.ToString("yyyy-MM-dd HH:mm:ss UTC") ?? "—")</td>
             </tr>
+            <tr>
+                <th>完成时间</th>
+                <td>@(Model.Vm.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss UTC") ?? "—")</td>
+            </tr>
             @if (!string.IsNullOrEmpty(Model.Vm.Error))
             {
                 <tr>
