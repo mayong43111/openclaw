@@ -4,7 +4,7 @@
 #   providers.tf    - Terraform + provider config
 #   variables.tf    - Input variables
 #   locals.tf       - Naming conventions
-#   main.tf         - Resource Group (this file)
+#   main.tf         - Resource Group
 #   network.tf      - VNet, Subnets, NSG, NAT Gateway, Public IPs
 #   appgateway.tf   - Application Gateway
 #   storage.tf      - Storage Account, Queue, Table, network rules
@@ -17,13 +17,18 @@
 # dynamically managed by Ansible (deploy-vm.yml). Terraform uses
 # lifecycle { ignore_changes } to avoid destroying Ansible-managed state.
 
-# ─── Resource Group ──────────────────────────────────────
-resource "azurerm_resource_group" "infra" {
-  name     = local.rg_name
-  location = var.location
-
-  tags = {
-    project = "openclaw"
-    managed = "terraform"
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
   }
+}
+
+provider "azurerm" {
+  subscription_id     = var.subscription_id
+  storage_use_azuread = true
+  features {}
 }

@@ -1,0 +1,35 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "IaC", "IaC", "{D7F637F0-38F9-9F04-A3CE-468BA677C770}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure", "Azure", "{7280123C-A162-08AD-63E2-D73501BB539F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "console", "console", "{F5D59745-918A-673F-0F2E-063B4BD027AA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenClaw.Console", "IaC\Azure\console\OpenClaw.Console.csproj", "{39B7A037-9212-127D-2A1D-AFD161DCFBAE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{39B7A037-9212-127D-2A1D-AFD161DCFBAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39B7A037-9212-127D-2A1D-AFD161DCFBAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39B7A037-9212-127D-2A1D-AFD161DCFBAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39B7A037-9212-127D-2A1D-AFD161DCFBAE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7280123C-A162-08AD-63E2-D73501BB539F} = {D7F637F0-38F9-9F04-A3CE-468BA677C770}
+		{F5D59745-918A-673F-0F2E-063B4BD027AA} = {7280123C-A162-08AD-63E2-D73501BB539F}
+		{39B7A037-9212-127D-2A1D-AFD161DCFBAE} = {F5D59745-918A-673F-0F2E-063B4BD027AA}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {881095D1-ED53-43DC-865B-01BB6800D472}
+	EndGlobalSection
+EndGlobal

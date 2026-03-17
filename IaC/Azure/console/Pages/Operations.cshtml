@@ -1,0 +1,579 @@
+@page
+@model OpenClaw.Console.Pages.OperationsModel
+@{
+    ViewData["Title"] = "运维与配置管理";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>⚙️ 运维与配置管理</h2>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+            + 创建 Agent
+        </button>
+        <button class="btn btn-outline-primary ms-2" disabled>
+            <span class="me-1">📤</span> 推送配置模板
+        </button>
+        <button class="btn btn-outline-success ms-2" disabled>
+            <span class="me-1">🔄</span> 批量升级
+        </button>
+    </div>
+</div>
+
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        @success
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        @error
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- ===== Agent 管理 (实时数据) ===== -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">@Model.TotalCount</h5>
+                <p class="card-text text-muted">总数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h5 class="card-title text-success">@Model.ReadyCount</h5>
+                <p class="card-text text-muted">就绪</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body">
+                <h5 class="card-title text-primary">@Model.CreatingCount</h5>
+                <p class="card-text text-muted">创建中</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body">
+                <h5 class="card-title text-danger">@Model.FailedCount</h5>
+                <p class="card-text text-muted">失败</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><strong>🖥️ Agent 列表</strong></div>
+    <div class="card-body p-0">
+@if (Model.VmRecords.Count == 0)
+{
+        <div class="p-3">
+            <div class="alert alert-info mb-0">暂无 Agent。点击 <strong>创建 Agent</strong> 开始使用。</div>
+        </div>
+}
+else
+{
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>名称</th>
+                    <th>标签</th>
+                    <th>状态</th>
+                    <th>IP</th>
+                    <th>URL</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var vm in Model.VmRecords)
+                {
+                    <tr>
+                        <td>
+                            <a asp-page="/VmDetail" asp-route-name="@vm.Name">@vm.Name</a>
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(vm.Tag))
+                            {
+                                <span class="badge bg-secondary">@vm.Tag</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td><span class="badge @vm.StatusBadgeClass">@vm.Status</span></td>
+                        <td><code>@(vm.VmIp ?? "—")</code></td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(vm.Url))
+                            {
+                                <a href="@vm.Url" target="_blank" rel="noopener">@vm.Url</a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>@(vm.CreatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                        <td>
+                            @if (vm.Status == "ready")
+                            {
+                                <form method="post" asp-page-handler="Restart" asp-route-name="@vm.Name" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-info"
+                                            onclick="return confirm('确认重启 @vm.Name？')">重启</button>
+                                </form>
+                                <form method="post" asp-page-handler="Delete" asp-route-name="@vm.Name" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('确认删除 @vm.Name？')">删除</button>
+                                </form>
+                            }
+                            else if (vm.Status == "failed")
+                            {
+                                <form method="post" asp-page-handler="Delete" asp-route-name="@vm.Name" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('确认删除 @vm.Name？')">删除</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+}
+    </div>
+</div>
+
+<!-- ===== 以下为规划中功能 (静态 Mock) ===== -->
+
+<!-- Version Management & Upgrade -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><strong>🔄 版本升级</strong></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">目标版本</label>
+                    <select class="form-select" disabled>
+                        <option selected>2026.3.15 (latest)</option>
+                        <option>2026.3.12 (current)</option>
+                        <option>2026.3.10</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">发布策略</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="strategy" checked disabled>
+                        <label class="form-check-label">金丝雀发布 (10% → 50% → 100%)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="strategy" disabled>
+                        <label class="form-check-label">滚动更新 (逐个)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="strategy" disabled>
+                        <label class="form-check-label">全部同时</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">选择 Agent</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked disabled>
+                        <label class="form-check-label">全部 Agent (8)</label>
+                    </div>
+                </div>
+                <button class="btn btn-primary w-100" disabled>🚀 开始升级</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>📋 Soul.md 配置模板</strong>
+                <button class="btn btn-sm btn-outline-secondary" disabled>+ 新建模板</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <!-- PJM 模板 -->
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">🗂️ PJM (项目经理)</h6>
+                                <small class="text-muted">适用于项目管理场景，含任务跟踪、会议纪要、风险管理能力</small>
+                            </div>
+                            <span class="badge bg-success">已启用</span>
+                        </div>
+                        <div class="mt-2 d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#pushModal" disabled>📤 推送</button>
+                            <button class="btn btn-sm btn-outline-secondary" disabled>📝 编辑</button>
+                            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#previewPjmModal">预览</button>
+                        </div>
+                    </div>
+                    <!-- 架构师 模板 -->
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">🏗️ 架构师</h6>
+                                <small class="text-muted">适用于系统架构设计，含代码审查、技术方案评审、性能分析能力</small>
+                            </div>
+                            <span class="badge bg-success">已启用</span>
+                        </div>
+                        <div class="mt-2 d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" disabled>📤 推送</button>
+                            <button class="btn btn-sm btn-outline-secondary" disabled>📝 编辑</button>
+                            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#previewArchModal">预览</button>
+                        </div>
+                    </div>
+                    <!-- 顾问 模板 -->
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">💼 顾问</h6>
+                                <small class="text-muted">适用于咨询服务场景，含行业研究、报告撰写、客户沟通能力</small>
+                            </div>
+                            <span class="badge bg-warning text-dark">草稿</span>
+                        </div>
+                        <div class="mt-2 d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" disabled>📤 推送</button>
+                            <button class="btn btn-sm btn-outline-secondary" disabled>📝 编辑</button>
+                            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#previewConsultModal">预览</button>
+                        </div>
+                    </div>
+                    <!-- 通用默认 模板 -->
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">⚙️ 通用默认</h6>
+                                <small class="text-muted">企业通用基线模板，适用于未指定角色的 Agent</small>
+                            </div>
+                            <span class="badge bg-success">已启用</span>
+                        </div>
+                        <div class="mt-2 d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" disabled>📤 推送</button>
+                            <button class="btn btn-sm btn-outline-secondary" disabled>📝 编辑</button>
+                            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#previewDefaultModal">预览</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Push Config Modal -->
+<div class="modal fade" id="pushModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📤 推送配置模板</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">选择模板</label>
+                    <select class="form-select" disabled>
+                        <option selected>🗂️ PJM (项目经理)</option>
+                        <option>🏗️ 架构师</option>
+                        <option>💼 顾问</option>
+                        <option>⚙️ 通用默认</option>
+                    </select>
+                </div>
+                <hr>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">推送目标</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="pushTarget" id="pushAll" value="all" checked disabled>
+                        <label class="form-check-label" for="pushAll">全部 Agent (@Model.TotalCount 台)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="pushTarget" id="pushByTag" value="tag" disabled>
+                        <label class="form-check-label" for="pushByTag">按标签</label>
+                    </div>
+                    <div id="tagSelectArea" class="ms-4 mt-1 mb-2" style="display:none;">
+                        <select class="form-select form-select-sm" disabled>
+                            <option value="" selected disabled>选择标签...</option>
+                            @foreach (var t in Model.AllTags)
+                            {
+                                <option value="@t">@t (@Model.VmRecords.Count(v => v.Tag == t) 台)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="pushTarget" id="pushByMachine" value="machine" disabled>
+                        <label class="form-check-label" for="pushByMachine">指定机器</label>
+                    </div>
+                    <div id="machineSelectArea" class="ms-4 mt-1" style="display:none;">
+                        @foreach (var vm in Model.VmRecords.Where(v => v.Status == "ready"))
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="pushMachines" value="@vm.Name" disabled>
+                                <label class="form-check-label">
+                                    @vm.Name
+                                    @if (!string.IsNullOrEmpty(vm.Tag))
+                                    {
+                                        <span class="badge bg-secondary ms-1" style="font-size:.7rem;">@vm.Tag</span>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" disabled>📤 确认推送</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal: PJM -->
+<div class="modal fade" id="previewPjmModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🗂️ PJM (项目经理) — Soul.md 预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="bg-light p-3 rounded mb-0" style="font-size:.85rem;max-height:400px;overflow-y:auto;"># Soul.md — PJM
+## Role
+You are a project management AI assistant.
+
+## Constraints
+- Track tasks, milestones, and deliverables
+- Generate meeting notes and action items
+- Flag schedule risks proactively
+- Coordinate cross-team dependencies
+
+## Tools
+- Allowed: web_search, doc_qa, calendar, task_tracker
+- Blocked: file_system, shell_exec
+
+## Output Format
+- Use structured bullet lists for action items
+- Always include owner and due date
+- Summarize decisions at the top of meeting notes</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-outline-secondary" disabled>📝 编辑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal: 架构师 -->
+<div class="modal fade" id="previewArchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🏗️ 架构师 — Soul.md 预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="bg-light p-3 rounded mb-0" style="font-size:.85rem;max-height:400px;overflow-y:auto;"># Soul.md — Architect
+## Role
+You are a software architecture AI assistant.
+
+## Constraints
+- Enforce coding standards and design patterns
+- Review PRs for security and performance
+- Generate architecture decision records (ADR)
+- Evaluate trade-offs with quantitative criteria
+
+## Tools
+- Allowed: code_gen, code_review, web_search, doc_qa
+- Blocked: shell_exec (production only)
+
+## Output Format
+- Always provide rationale for design decisions
+- Include sequence diagrams where applicable
+- Reference relevant design patterns by name</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-outline-secondary" disabled>📝 编辑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal: 顾问 -->
+<div class="modal fade" id="previewConsultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">💼 顾问 — Soul.md 预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="bg-light p-3 rounded mb-0" style="font-size:.85rem;max-height:400px;overflow-y:auto;"># Soul.md — Consultant
+## Role
+You are a consulting AI assistant.
+
+## Constraints
+- Research industry trends and benchmarks
+- Draft client-facing reports and proposals
+- Maintain confidentiality across engagements
+- Cite data sources for all claims
+
+## Tools
+- Allowed: web_search, doc_qa, data_analysis
+- Blocked: file_system, shell_exec, code_gen
+
+## Output Format
+- Executive summary first, details below
+- Use charts and tables for data presentation
+- Keep language professional and client-appropriate</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-outline-secondary" disabled>📝 编辑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal: 通用默认 -->
+<div class="modal fade" id="previewDefaultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">⚙️ 通用默认 — Soul.md 预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="bg-light p-3 rounded mb-0" style="font-size:.85rem;max-height:400px;overflow-y:auto;"># Soul.md — Enterprise Default
+## Role
+You are an enterprise AI assistant.
+
+## Constraints
+- Follow company security policies
+- Do not share confidential data
+- Escalate sensitive requests to human
+- Comply with data retention policies
+
+## Tools
+- Allowed: web_search, code_gen, doc_qa
+- Blocked: file_system, shell_exec
+
+## Output Format
+- Use clear, concise language
+- Structure responses with headings
+- Include disclaimers for sensitive topics</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-outline-secondary" disabled>📝 编辑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rollback History -->
+<div class="card">
+    <div class="card-header"><strong>📜 升级与回滚历史</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>时间</th>
+                    <th>操作</th>
+                    <th>从</th>
+                    <th>到</th>
+                    <th>范围</th>
+                    <th>状态</th>
+                    <th>操作人</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="text-muted">2026-03-15 14:30</span></td>
+                    <td><span class="badge bg-primary">升级</span></td>
+                    <td><code>2026.3.10</code></td>
+                    <td><code>2026.3.12</code></td>
+                    <td>All (8 agents)</td>
+                    <td><span class="badge bg-success">完成</span></td>
+                    <td>admin@ymms.com</td>
+                </tr>
+                <tr>
+                    <td><span class="text-muted">2026-03-12 09:15</span></td>
+                    <td><span class="badge bg-warning text-dark">回滚</span></td>
+                    <td><code>2026.3.11</code></td>
+                    <td><code>2026.3.10</code></td>
+                    <td>vm-openclaw-03</td>
+                    <td><span class="badge bg-success">完成</span></td>
+                    <td>admin@ymms.com</td>
+                </tr>
+                <tr>
+                    <td><span class="text-muted">2026-03-10 16:00</span></td>
+                    <td><span class="badge bg-info">配置推送</span></td>
+                    <td>—</td>
+                    <td>soul-v2</td>
+                    <td>All (6 agents)</td>
+                    <td><span class="badge bg-success">完成</span></td>
+                    <td>admin@ymms.com</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create Agent Modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="Create">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建新 Agent</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="imageName" class="form-label">虚拟机镜像</label>
+                        <select name="imageName" id="imageName" class="form-select" required>
+                            @if (Model.Images.Count == 0)
+                            {
+                                <option value="" disabled selected>无可用镜像</option>
+                            }
+                            else
+                            {
+                                @foreach (var img in Model.Images)
+                                {
+                                    <option value="@img.Name">@img.DisplayName (@img.OsType)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="tag" class="form-label">标签 (Tag)</label>
+                        <input type="text" name="tag" id="tag" class="form-control" placeholder="例如: production, staging, test"
+                               list="tagSuggestions">
+                        <datalist id="tagSuggestions">
+                            @foreach (var t in Model.AllTags)
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </datalist>
+                        <div class="form-text">可选。用于分组管理和批量推送配置。</div>
+                    </div>
+                    <p class="text-muted">将异步创建一个新的 OpenClaw Agent。
+                        名称和管理员密码将自动生成。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" @(Model.Images.Count == 0 ? "disabled" : "")>创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

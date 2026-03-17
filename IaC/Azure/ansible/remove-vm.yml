@@ -1,0 +1,220 @@
+---
+# remove-vm.yml - Delete OpenClaw VM and its App Gateway routing config
+#
+# Usage:
+#   ansible-playbook remove-vm.yml -e vm_name=vm-ymms-openclaw-02
+#
+# What it removes (in order):
+#   1. App Gateway: routing rule → listener → backend pool
+#   2. Azure VM + OS disk
+#   3. NIC
+#   4. Local registry (vms.yml, host_vars, hosts.yml)
+
+- name: Remove OpenClaw VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - vm_name | length > 0
+        fail_msg: "vm_name must be set (-e vm_name=vm-ymms-openclaw-XX)"
+
+    - name: Extract VM short name (e.g. '02' from 'vm-ymms-openclaw-02')
+      ansible.builtin.set_fact:
+        vm_short_name: "{{ vm_name.split('-')[-1] }}"
+
+    # ── Private DNS cleanup ────────────────────────────────
+    - name: Check if DNS A record exists
+      ansible.builtin.command:
+        cmd: >
+          az network private-dns record-set a show
+            --resource-group {{ infra_rg }}
+            --zone-name openclaw.internal
+            --name {{ vm_name }}
+            --query name -o tsv
+      register: dns_check
+      changed_when: false
+      failed_when: false
+
+    - name: Delete DNS A record ({{ vm_name }}.openclaw.internal)
+      ansible.builtin.command:
+        cmd: >
+          az network private-dns record-set a delete
+            --resource-group {{ infra_rg }}
+            --zone-name openclaw.internal
+            --name {{ vm_name }}
+            --yes
+      when: dns_check.rc == 0
+      register: dns_delete
+      changed_when: dns_delete.rc == 0
+
+    - name: DNS cleanup summary
+      ansible.builtin.debug:
+        msg: >
+          DNS: {{ vm_name }}.openclaw.internal={{ 'deleted' if dns_check.rc == 0 else 'absent' }}
+
+    # ── VM + disk + NIC cleanup ──────────────────────────────
+    - name: Check if VM exists
+      ansible.builtin.command:
+        cmd: >
+          az vm show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --query id -o tsv
+      register: vm_check
+      changed_when: false
+      failed_when: false
+
+    - name: Get OS disk name before deleting VM
+      ansible.builtin.command:
+        cmd: >
+          az vm show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --query storageProfile.osDisk.managedDisk.id -o tsv
+      register: os_disk_id
+      changed_when: false
+      failed_when: false
+      when: vm_check.rc == 0
+
+    - name: Get data disk IDs before deleting VM
+      ansible.builtin.command:
+        cmd: >
+          az vm show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --query "storageProfile.dataDisks[].managedDisk.id" -o tsv
+      register: data_disk_ids
+      changed_when: false
+      failed_when: false
+      when: vm_check.rc == 0
+
+    - name: Delete VM
+      ansible.builtin.command:
+        cmd: >
+          az vm delete
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}
+            --force-deletion true
+            --yes
+      when: vm_check.rc == 0
+      register: vm_delete
+      changed_when: vm_delete.rc == 0
+
+    - name: Delete OS disk
+      ansible.builtin.command:
+        cmd: >
+          az disk delete
+            --ids {{ os_disk_id.stdout }}
+            --yes
+      when:
+        - vm_check.rc == 0
+        - os_disk_id.stdout | default('') | length > 0
+      register: os_disk_delete
+      changed_when: os_disk_delete.rc == 0
+      failed_when: false
+
+    - name: Delete data disks
+      ansible.builtin.command:
+        cmd: >
+          az disk delete
+            --ids {{ item }}
+            --yes
+      loop: "{{ (data_disk_ids.stdout_lines | default([])) }}"
+      when:
+        - vm_check.rc == 0
+        - data_disk_ids.stdout | default('') | length > 0
+      register: data_disk_delete
+      changed_when: data_disk_delete.rc == 0
+      failed_when: false
+
+    - name: Check if NIC exists
+      ansible.builtin.command:
+        cmd: >
+          az network nic show
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}-nic
+            --query id -o tsv
+      register: nic_check
+      changed_when: false
+      failed_when: false
+
+    - name: Delete NIC ({{ vm_name }}-nic)
+      ansible.builtin.command:
+        cmd: >
+          az network nic delete
+            --resource-group {{ infra_rg }}
+            --name {{ vm_name }}-nic
+      when: nic_check.rc == 0
+      register: nic_delete
+      changed_when: nic_delete.rc == 0
+
+    - name: Azure cleanup summary
+      ansible.builtin.debug:
+        msg: >
+          VM={{ 'deleted' if vm_check.rc == 0 else 'absent' }},
+          OS disk={{ 'deleted' if (os_disk_delete.rc | default(-1)) == 0 else 'absent/skipped' }},
+          NIC={{ 'deleted' if nic_check.rc == 0 else 'absent' }}
+
+    # ── Local registry cleanup ───────────────────────────────
+    - name: Remove host_vars file
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/inventory/host_vars/{{ vm_name }}.yml"
+        state: absent
+
+    - name: Remove VM from hosts.yml
+      ansible.builtin.lineinfile:
+        path: "{{ playbook_dir }}/inventory/hosts.yml"
+        regexp: "^\\s+{{ vm_name }}:"
+        state: absent
+
+    - name: Load vms.yml registry
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/vms.yml"
+      register: vms_file
+      failed_when: false
+
+    - name: Update vms.yml (remove entry)
+      when: vms_file is not failed
+      block:
+        - name: Parse registry
+          ansible.builtin.set_fact:
+            vm_registry: "{{ vms_file.content | b64decode | from_yaml }}"
+
+        - name: Filter out removed VM
+          ansible.builtin.set_fact:
+            vm_list_clean: "{{ vm_registry.vms | rejectattr('name', 'equalto', vm_name) | list }}"
+
+        - name: Write updated registry
+          ansible.builtin.copy:
+            content: |
+              # OpenClaw VM Registry
+              # Auto-generated by deploy-vm.yml
+              ---
+              vms:
+              {% for vm in vm_list_clean %}
+                - name: "{{ vm.name }}"
+                  ip: "{{ vm.ip }}"
+                  port: {{ vm.port }}
+                  token: "{{ vm.token }}"
+                  url: "{{ vm.url }}"
+                  admin_user: "{{ vm.admin_user }}"
+                  model: "{{ vm.model }}"
+                  deployed_at: "{{ vm.deployed_at }}"
+              {% endfor %}
+            dest: "{{ playbook_dir }}/vms.yml"
+            mode: "0600"
+
+    - name: Removal complete
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════╗
+          ║  VM Removed: {{ vm_name }}
+          ╠══════════════════════════════════════════════════╣
+          ║  App Gateway: rule/listener/pool cleaned up
+          ║  Azure: VM + OS disk + data disks + NIC deleted
+          ║  Local: vms.yml + host_vars + hosts.yml updated
+          ╚══════════════════════════════════════════════════╝

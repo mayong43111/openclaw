@@ -1,0 +1,21 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Certificates and keys
+certs/
+*.pfx
+*.key
+*.pem
+*.csr
+*.srl
+
+# .NET build artifacts
+console/bin/
+console/obj/
+
+# Ansible secrets
+ansible/vms.yml
+ansible/inventory/host_vars/*.yml

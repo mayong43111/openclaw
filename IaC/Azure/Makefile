@@ -198,6 +198,29 @@ infra-destroy: ## Destroy infrastructure
 infra-output: ## Show Terraform outputs
 	cd $(TF_DIR) && $(TF) output
 
+# ─── Console (App Service) ───────────────────────────────
+CONSOLE_DIR      := console
+CONSOLE_RG       := rg-$(PREFIX)-openclaw-infra
+CONSOLE_APP      := app-$(PREFIX)-console
+
+.PHONY: console-deploy
+console-deploy: ## Deploy Console + Worker to App Service (ZIP deploy)
+	@echo "=== Publishing .NET app ==="
+	cd $(CONSOLE_DIR) && dotnet publish -c Release -o ./publish
+	@echo "=== Creating ZIP package ==="
+	cd $(CONSOLE_DIR)/publish && zip -r ../deploy.zip .
+	@echo "=== Deploying to $(CONSOLE_APP) ==="
+	az webapp deploy \
+		--resource-group $(CONSOLE_RG) \
+		--name $(CONSOLE_APP) \
+		--src-path $(CONSOLE_DIR)/deploy.zip \
+		--type zip \
+		--async true
+	rm -rf $(CONSOLE_DIR)/publish $(CONSOLE_DIR)/deploy.zip
+	@echo ""
+	@echo "=== Deployed ==="
+	@echo "  App: https://$(CONSOLE_APP).azurewebsites.net"
+
 # ─── vm (Ansible) ────────────────────────────────────────
 ANSIBLE_DIR      := ansible
 ANSIBLE_INVENTORY := $(ANSIBLE_DIR)/inventory

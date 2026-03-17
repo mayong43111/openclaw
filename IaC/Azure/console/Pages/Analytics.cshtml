@@ -1,0 +1,386 @@
+@page
+@model OpenClaw.Console.Pages.AnalyticsModel
+@{
+    ViewData["Title"] = "运营分析展示";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>📊 运营分析展示</h2>
+    <div class="d-flex gap-2 align-items-center">
+        <select class="form-select form-select-sm" style="width:150px;" disabled>
+            <option selected>近 7 天</option>
+            <option>近 30 天</option>
+            <option>近 90 天</option>
+            <option>自定义范围</option>
+        </select>
+        <button class="btn btn-outline-primary btn-sm" disabled>
+            <span class="me-1">📤</span> 导出报告
+        </button>
+    </div>
+</div>
+
+<!-- KPI Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-text mb-1" style="opacity:0.8">自动化操作</p>
+                        <h3 class="card-title mb-0">12,847</h3>
+                    </div>
+                    <div style="font-size:2.5rem;opacity:0.3">🤖</div>
+                </div>
+                <small style="opacity:0.8">↑ 23% vs last week</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-text mb-1" style="opacity:0.8">节省工时</p>
+                        <h3 class="card-title mb-0">486h</h3>
+                    </div>
+                    <div style="font-size:2.5rem;opacity:0.3">⏱️</div>
+                </div>
+                <small style="opacity:0.8">↑ 15% vs last week</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-text mb-1" style="opacity:0.8">效率提升</p>
+                        <h3 class="card-title mb-0">34%</h3>
+                    </div>
+                    <div style="font-size:2.5rem;opacity:0.3">📈</div>
+                </div>
+                <small style="opacity:0.8">↑ 5pp vs last month</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-text mb-1" style="opacity:0.8">预估 ROI</p>
+                        <h3 class="card-title mb-0">¥182K</h3>
+                    </div>
+                    <div style="font-size:2.5rem;opacity:0.3">💰</div>
+                </div>
+                <small>Monthly cost savings</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Usage Trends (Placeholder Chart Area) -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>📈 Agent Activity Trend (7 days)</strong>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active" disabled>Daily</button>
+                    <button class="btn btn-outline-secondary" disabled>Weekly</button>
+                    <button class="btn btn-outline-secondary" disabled>Monthly</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Simulated chart with CSS bars -->
+                <div class="d-flex align-items-end justify-content-around" style="height:200px; margin-bottom:0.5rem;">
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:120px;opacity:0.7"></div>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:150px;opacity:0.8"></div>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:170px;opacity:0.85"></div>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:140px;opacity:0.75"></div>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:190px;opacity:0.9"></div>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:80px;opacity:0.5"></div>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:195px;opacity:1.0"></div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-around">
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周一</small>
+                        <small>1,543</small>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周二</small>
+                        <small>1,892</small>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周三</small>
+                        <small>2,134</small>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周四</small>
+                        <small>1,756</small>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周五</small>
+                        <small>2,387</small>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周六</small>
+                        <small>987</small>
+                    </div>
+                    <div class="text-center" style="width:40px;">
+                        <small class="text-muted d-block">周日</small>
+                        <small>2,148</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header"><strong>🏷️ 任务类别分布</strong></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Code Generation</span>
+                        <strong>35%</strong>
+                    </div>
+                    <div class="progress" style="height:12px;">
+                        <div class="progress-bar bg-primary" style="width:35%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>文档问答</span>
+                        <strong>25%</strong>
+                    </div>
+                    <div class="progress" style="height:12px;">
+                        <div class="progress-bar bg-success" style="width:25%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>数据分析</span>
+                        <strong>20%</strong>
+                    </div>
+                    <div class="progress" style="height:12px;">
+                        <div class="progress-bar bg-info" style="width:20%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Web Research</span>
+                        <strong>12%</strong>
+                    </div>
+                    <div class="progress" style="height:12px;">
+                        <div class="progress-bar bg-warning" style="width:12%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Other</span>
+                        <strong>8%</strong>
+                    </div>
+                    <div class="progress" style="height:12px;">
+                        <div class="progress-bar bg-secondary" style="width:8%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Per-Agent Performance -->
+<div class="card mb-4">
+    <div class="card-header"><strong>🏆 Agent 绩效排名</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Agent</th>
+                    <th>Owner</th>
+                    <th>完成任务数</th>
+                    <th>节省工时</th>
+                    <th>成功率</th>
+                    <th>平均响应</th>
+                    <th>Est. Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="badge bg-warning text-dark">🥇</span></td>
+                    <td><code>vm-ymms-openclaw-07</code></td>
+                    <td>Zhang Lei</td>
+                    <td>3,421</td>
+                    <td>128h</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="progress flex-grow-1 me-2" style="height:8px;">
+                                <div class="progress-bar bg-success" style="width:96%;"></div>
+                            </div>
+                            <small>96%</small>
+                        </div>
+                    </td>
+                    <td>2.3s</td>
+                    <td><strong class="text-success">¥48K</strong></td>
+                </tr>
+                <tr>
+                    <td><span class="badge bg-secondary">🥈</span></td>
+                    <td><code>vm-ymms-openclaw-08</code></td>
+                    <td>Wang Yan</td>
+                    <td>2,876</td>
+                    <td>102h</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="progress flex-grow-1 me-2" style="height:8px;">
+                                <div class="progress-bar bg-success" style="width:94%;"></div>
+                            </div>
+                            <small>94%</small>
+                        </div>
+                    </td>
+                    <td>1.8s</td>
+                    <td><strong class="text-success">¥41K</strong></td>
+                </tr>
+                <tr>
+                    <td><span class="badge bg-warning text-dark" style="opacity:0.6">🥉</span></td>
+                    <td><code>vm-ymms-openclaw-03</code></td>
+                    <td>Li Min</td>
+                    <td>2,102</td>
+                    <td>87h</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="progress flex-grow-1 me-2" style="height:8px;">
+                                <div class="progress-bar bg-warning" style="width:88%;"></div>
+                            </div>
+                            <small>88%</small>
+                        </div>
+                    </td>
+                    <td>3.1s</td>
+                    <td><strong class="text-success">¥32K</strong></td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td><code>vm-ymms-openclaw-02</code></td>
+                    <td>Chen Wei</td>
+                    <td>1,654</td>
+                    <td>65h</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="progress flex-grow-1 me-2" style="height:8px;">
+                                <div class="progress-bar bg-success" style="width:92%;"></div>
+                            </div>
+                            <small>92%</small>
+                        </div>
+                    </td>
+                    <td>2.7s</td>
+                    <td><strong class="text-success">¥25K</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ROI Calculation -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>💰 ROI 计算总结</strong></div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <td class="text-muted">Total Hours Saved (Monthly)</td>
+                            <td class="text-end"><strong>486 hours</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Average Hourly Cost (Employee)</td>
+                            <td class="text-end"><strong>¥375/hr</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Gross Labor Savings</td>
+                            <td class="text-end"><strong class="text-success">¥182,250</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">AI Infrastructure Cost</td>
+                            <td class="text-end"><strong class="text-danger">-¥45,600</strong></td>
+                        </tr>
+                        <tr class="table-success">
+                            <td><strong>Net Monthly Savings</strong></td>
+                            <td class="text-end"><strong class="text-success" style="font-size:1.2em;">¥136,650</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">ROI Ratio</td>
+                            <td class="text-end"><strong class="text-success">299%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>📋 业务 KPI 影响</strong></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Code Review Turnaround</span>
+                        <span class="text-success">↓ 60% (4h → 1.5h)</span>
+                    </div>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar bg-success" style="width:60%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Customer Response Time</span>
+                        <span class="text-success">↓ 45% (30min → 16min)</span>
+                    </div>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar bg-success" style="width:45%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Report Generation Speed</span>
+                        <span class="text-success">↓ 80% (2h → 25min)</span>
+                    </div>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar bg-success" style="width:80%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Employee Satisfaction</span>
+                        <span class="text-success">↑ 22% (NPS: 45 → 55)</span>
+                    </div>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar bg-info" style="width:22%;"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Bug Discovery Rate</span>
+                        <span class="text-success">↑ 35%</span>
+                    </div>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar bg-info" style="width:35%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

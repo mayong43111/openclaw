@@ -42,4 +42,36 @@ $clawVer = & cmd /c "openclaw --version" 2>&1
 $ErrorActionPreference = "Stop"
 Write-Output "OpenClaw: $clawVer"
 
+# Install Playwright Chromium browser binary (required by OpenClaw browser tools)
+# playwright-core is already a core dependency of openclaw; we just need the browser binary.
+Write-Output "=== Installing Playwright Chromium browser ==="
+$ErrorActionPreference = "Continue"
+& node "$globalPrefix\node_modules\openclaw\node_modules\playwright-core\cli.js" install --with-deps chromium 2>&1 | Write-Output
+$ErrorActionPreference = "Stop"
+Write-Output "Playwright Chromium installed."
+
+# Install clawhub (skill registry CLI)
+Write-Output "=== Installing clawhub ==="
+$ErrorActionPreference = "Continue"
+& "C:\Program Files\nodejs\npm.cmd" install -g clawhub --legacy-peer-deps 2>&1 | Write-Output
+$ErrorActionPreference = "Stop"
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+$ErrorActionPreference = "Continue"
+$hubVer = & cmd /c "clawhub help" 2>&1 | Select-Object -First 1
+$ErrorActionPreference = "Stop"
+Write-Output "clawhub: installed ($hubVer)"
+
+# Verify node:sqlite (built into Node 22+)
+Write-Output "=== Verifying native dependencies ==="
+$env:Path = "$globalPrefix;$env:Path"
+$ErrorActionPreference = "Continue"
+$result = & cmd /c "node -e `"require('node:sqlite'); console.log('node:sqlite OK')`"" 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Output "  node:sqlite: OK"
+} else {
+    Write-Output "  WARNING: node:sqlite failed to load (non-fatal): $result"
+}
+$ErrorActionPreference = "Stop"
+
 Write-Output "=== OpenClaw installation complete ==="
+exit 0

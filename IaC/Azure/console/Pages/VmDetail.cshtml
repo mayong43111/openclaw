@@ -1,0 +1,142 @@
+@page "{name}"
+@model OpenClaw.Console.Pages.VmDetailModel
+@{
+    ViewData["Title"] = $"Agent: {Model.Vm?.Name ?? "未找到"}";
+}
+
+@if (Model.Vm == null)
+{
+    <div class="alert alert-warning">未找到该 Agent。</div>
+    <a asp-page="/Index" class="btn btn-secondary">← 返回</a>
+    return;
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-page="/Index">Agent 管理</a></li>
+        <li class="breadcrumb-item active">@Model.Vm.Name</li>
+    </ol>
+</nav>
+
+<h3>@Model.Vm.Name <span class="badge @Model.Vm.StatusBadgeClass">@Model.Vm.Status</span></h3>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <table class="table table-borderless mb-0">
+            <tr>
+                <th style="width:160px">名称</th>
+                <td>@Model.Vm.Name</td>
+            </tr>
+            <tr>
+                <th>状态</th>
+                <td><span class="badge @Model.Vm.StatusBadgeClass">@Model.Vm.Status</span></td>
+            </tr>
+            <tr>
+                <th>内网 IP</th>
+                <td><code>@(Model.Vm.VmIp ?? "—")</code></td>
+            </tr>
+            <tr>
+                <th>URL</th>
+                <td>
+                    @if (!string.IsNullOrEmpty(Model.Vm.Url))
+                    {
+                        <a href="@Model.Vm.Url" target="_blank" rel="noopener">@Model.Vm.Url</a>
+                    }
+                    else
+                    {
+                        <span class="text-muted">—</span>
+                    }
+                </td>
+            </tr>
+            <tr>
+                <th>令牌</th>
+                <td>
+                    @if (!string.IsNullOrEmpty(Model.Vm.Token))
+                    {
+                        <code id="tokenValue" class="user-select-all">@Model.Vm.Token</code>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToken()">📋 复制</button>
+                        <span id="copyFeedback" class="text-success ms-1 d-none">✓ 已复制</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">—</span>
+                    }
+                </td>
+            </tr>
+            <tr>
+                <th>创建时间</th>
+                <td>@(Model.Vm.CreatedAt?.ToString("yyyy-MM-dd HH:mm:ss UTC") ?? "—")</td>
+            </tr>
+            @if (!string.IsNullOrEmpty(Model.Vm.Error))
+            {
+                <tr>
+                    <th>错误</th>
+                    <td><pre class="text-danger mb-0">@Model.Vm.Error</pre></td>
+                </tr>
+            }
+        </table>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a asp-page="/Index" class="btn btn-secondary">← 返回</a>
+</div>
+
+@if (Model.Logs.Count > 0)
+{
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>📋 任务日志 (@Model.Logs[0].Action)</strong>
+            @if (Model.AutoRefresh)
+            {
+                <span class="badge bg-info text-dark">
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    每 10 秒自动刷新
+                </span>
+            }
+        </div>
+        <div class="card-body p-0">
+            <pre id="logOutput" class="mb-0 p-3" style="max-height:500px; overflow-y:auto; font-size:0.82rem; background:#1e1e1e; color:#d4d4d4; white-space:pre-wrap; word-break:break-all;">@foreach (var log in Model.Logs){@log.Text}</pre>
+        </div>
+    </div>
+}
+else if (Model.AutoRefresh)
+{
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>📋 任务日志</strong>
+            <span class="badge bg-info text-dark">
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                等待日志...
+            </span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-0">任务已加入队列，日志即将出现...</p>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+function copyToken() {
+    const text = document.getElementById('tokenValue').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const fb = document.getElementById('copyFeedback');
+        fb.classList.remove('d-none');
+        setTimeout(() => fb.classList.add('d-none'), 2000);
+    });
+}
+
+@if (Model.AutoRefresh)
+{
+    <text>
+    // Auto-refresh every 10 seconds while VM is in transitional state
+    setTimeout(function() { location.reload(); }, 10000);
+
+    // Auto-scroll log output to bottom
+    var logEl = document.getElementById('logOutput');
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+    </text>
+}
+</script>
+}

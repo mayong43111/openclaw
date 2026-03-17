@@ -1,0 +1,15 @@
+locals {
+  rg_name       = "rg-${var.prefix}-openclaw-infra"
+  vnet_name     = "vnet-${var.prefix}-openclaw"
+  nsg_name      = "nsg-${var.prefix}-openclaw-vm"
+  appgw_name    = "appgw-${var.prefix}-openclaw"
+  pip_name      = "pip-${var.prefix}-appgw"
+  nat_name      = "nat-${var.prefix}-openclaw"
+  nat_pip       = "pip-${var.prefix}-nat"
+  sa_name       = "st${var.prefix}openclaw"
+  aif_name      = "aif-${var.prefix}-openclaw"
+  mi_name       = "id-${var.prefix}-openclaw-vm"
+  plan_name     = "plan-${var.prefix}-openclaw"
+  console_name  = "app-${var.prefix}-console"
+  worker_name   = "func-${var.prefix}-worker"
+}

@@ -1,0 +1,291 @@
+@page
+@model OpenClaw.Console.Pages.SecurityModel
+@{
+    ViewData["Title"] = "安全与合规治理";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>🔒 安全与合规治理</h2>
+    <div>
+        <button class="btn btn-outline-primary" disabled>
+            <span class="me-1">📋</span> 推送安全策略
+        </button>
+        <button class="btn btn-outline-warning ms-2" disabled>
+            <span class="me-1">🔍</span> 审计报告
+        </button>
+    </div>
+</div>
+
+<!-- Security Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body">
+                <h5 class="card-title text-primary">12</h5>
+                <p class="card-text text-muted">人类用户</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body">
+                <h5 class="card-title text-info">8</h5>
+                <p class="card-text text-muted">AI Agent</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h5 class="card-title text-success">3</h5>
+                <p class="card-text text-muted">待审批</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body">
+                <h5 class="card-title text-danger">1</h5>
+                <p class="card-text text-muted">Policy Violations</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User-Agent Mapping -->
+<div class="card mb-4">
+    <div class="card-header"><strong>👤 人机账号映射</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Employee</th>
+                    <th>部门</th>
+                    <th>Assigned Agent</th>
+                    <th>Agent Role</th>
+                    <th>权限级别</th>
+                    <th>Last Active</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-primary rounded-circle me-2" style="width:32px;height:32px;line-height:32px;font-size:14px;">ZL</span>
+                            <div>
+                                <div>Zhang Lei</div>
+                                <small class="text-muted">zhang.lei@ymms.com</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>工程部</td>
+                    <td><code>vm-ymms-openclaw-07</code></td>
+                    <td><span class="badge bg-info">Code Assistant</span></td>
+                    <td>
+                        <span class="badge bg-warning text-dark">标准</span>
+                    </td>
+                    <td>2min ago</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" disabled>编辑</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-success rounded-circle me-2" style="width:32px;height:32px;line-height:32px;font-size:14px;">WY</span>
+                            <div>
+                                <div>Wang Yan</div>
+                                <small class="text-muted">wang.yan@ymms.com</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>Sales</td>
+                    <td><code>vm-ymms-openclaw-08</code></td>
+                    <td><span class="badge bg-info">Sales Copilot</span></td>
+                    <td>
+                        <span class="badge bg-warning text-dark">标准</span>
+                    </td>
+                    <td>15min ago</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" disabled>编辑</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-danger rounded-circle me-2" style="width:32px;height:32px;line-height:32px;font-size:14px;">LM</span>
+                            <div>
+                                <div>Li Min</div>
+                                <small class="text-muted">li.min@ymms.com</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>财务部</td>
+                    <td><code>vm-ymms-openclaw-03</code></td>
+                    <td><span class="badge bg-info">Finance Analyst</span></td>
+                    <td>
+                        <span class="badge bg-danger">Elevated</span>
+                    </td>
+                    <td>1h ago</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" disabled>编辑</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Security Policy -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><strong>🛡️ 安全基线策略</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>策略</th>
+                            <th>状态</th>
+                            <th>作用范围</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Restrict PII data output</td>
+                            <td><span class="badge bg-success">活跃</span></td>
+                            <td>All Agents</td>
+                        </tr>
+                        <tr>
+                            <td>Block shell_exec tool</td>
+                            <td><span class="badge bg-success">活跃</span></td>
+                            <td>All Agents</td>
+                        </tr>
+                        <tr>
+                            <td>Require human approval for file deletion</td>
+                            <td><span class="badge bg-success">活跃</span></td>
+                            <td>All Agents</td>
+                        </tr>
+                        <tr>
+                            <td>Limit external API calls (&lt; 100/hr)</td>
+                            <td><span class="badge bg-success">活跃</span></td>
+                            <td>Standard tier</td>
+                        </tr>
+                        <tr>
+                            <td>Allow direct DB access</td>
+                            <td><span class="badge bg-secondary">Draft</span></td>
+                            <td>Elevated only</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <button class="btn btn-sm btn-outline-primary" disabled>+ Add Policy</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>⚠️ 待审批请求</strong>
+                <span class="badge bg-warning text-dark">3 pending</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">Enable web_scraping skill</h6>
+                                <p class="mb-1 text-muted small">Requested by: vm-ymms-openclaw-07 (Zhang Lei)</p>
+                                <small class="text-muted">Risk: <span class="text-warning">中</span> — 2h ago</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-success me-1" disabled>✓</button>
+                                <button class="btn btn-sm btn-danger" disabled>✗</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">Access production database</h6>
+                                <p class="mb-1 text-muted small">Requested by: vm-ymms-openclaw-03 (Li Min)</p>
+                                <small class="text-muted">Risk: <span class="text-danger">高</span> — 5h ago</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-success me-1" disabled>✓</button>
+                                <button class="btn btn-sm btn-danger" disabled>✗</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">Increase API rate limit to 500/hr</h6>
+                                <p class="mb-1 text-muted small">Requested by: vm-ymms-openclaw-08 (Wang Yan)</p>
+                                <small class="text-muted">Risk: <span class="text-success">低</span> — 1d ago</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-success me-1" disabled>✓</button>
+                                <button class="btn btn-sm btn-danger" disabled>✗</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit Log -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>📜 安全审计日志</strong>
+        <input type="text" class="form-control form-control-sm" style="width:250px;" placeholder="Search audit events..." disabled>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Time</th>
+                    <th>级别</th>
+                    <th>Agent</th>
+                    <th>事件</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="table-danger">
+                    <td><span class="text-muted">03-17 01:45</span></td>
+                    <td><span class="badge bg-danger">VIOLATION</span></td>
+                    <td>vm-openclaw-03</td>
+                    <td>Attempted PII extraction</td>
+                    <td class="text-truncate" style="max-width:300px;">Agent attempted to extract SSN patterns from customer_data table</td>
+                </tr>
+                <tr>
+                    <td><span class="text-muted">03-17 00:30</span></td>
+                    <td><span class="badge bg-warning text-dark">WARNING</span></td>
+                    <td>vm-openclaw-07</td>
+                    <td>Rate limit approaching</td>
+                    <td class="text-truncate" style="max-width:300px;">External API calls: 88/100 in current hour</td>
+                </tr>
+                <tr>
+                    <td><span class="text-muted">03-16 23:15</span></td>
+                    <td><span class="badge bg-info">INFO</span></td>
+                    <td>vm-openclaw-08</td>
+                    <td>Skill approved</td>
+                    <td class="text-truncate" style="max-width:300px;">web_search skill approved by admin@ymms.com</td>
+                </tr>
+                <tr>
+                    <td><span class="text-muted">03-16 18:00</span></td>
+                    <td><span class="badge bg-info">INFO</span></td>
+                    <td>System</td>
+                    <td>Policy updated</td>
+                    <td class="text-truncate" style="max-width:300px;">Security baseline v2.1 pushed to all agents</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

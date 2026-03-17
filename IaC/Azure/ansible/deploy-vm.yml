@@ -161,49 +161,29 @@
         aoai_api_key_fact: "{{ aoai_api_key }}"
         appgw_public_ip_fact: "{{ appgw_public_ip }}"
 
-    # --- Per-VM App Gateway routing (backend pool + listener + rule) ---
-    - name: Create per-VM backend pool (pool-{{ vm_short_name }})
+    # --- Private DNS record for hostname-based routing via nginx ---
+    - name: Create/update DNS A record ({{ vm_name }}.openclaw.internal → {{ vm_private_ip }})
       ansible.builtin.command:
         cmd: >
-          az network application-gateway address-pool create
+          az network private-dns record-set a add-record
             --resource-group {{ infra_rg }}
-            --gateway-name {{ appgw_name }}
-            --name pool-{{ vm_short_name }}
-            --servers {{ vm_private_ip }}
+            --zone-name openclaw.internal
+            --record-set-name {{ vm_name }}
+            --ipv4-address {{ vm_private_ip }}
             --output json
-      register: pool_result
-      changed_when: "'provisioningState' in pool_result.stdout"
+      register: dns_result
+      changed_when: "'fqdn' in dns_result.stdout"
 
-    - name: Create per-VM HTTPS listener (listener-{{ vm_short_name }})
+    - name: Set DNS TTL to 10s for fast updates
       ansible.builtin.command:
         cmd: >
-          az network application-gateway http-listener create
+          az network private-dns record-set a update
             --resource-group {{ infra_rg }}
-            --gateway-name {{ appgw_name }}
-            --name listener-{{ vm_short_name }}
-            --frontend-port https-port
-            --frontend-ip appgw-frontend-ip
-            --ssl-cert wildcard-nip-io
-            --host-name {{ vm_name }}.{{ appgw_public_ip }}.nip.io
+            --zone-name openclaw.internal
+            --name {{ vm_name }}
+            --set ttl=10
             --output json
-      register: listener_result
-      changed_when: "'provisioningState' in listener_result.stdout"
-
-    - name: Create per-VM routing rule (rule-{{ vm_short_name }})
-      ansible.builtin.command:
-        cmd: >
-          az network application-gateway rule create
-            --resource-group {{ infra_rg }}
-            --gateway-name {{ appgw_name }}
-            --name rule-{{ vm_short_name }}
-            --rule-type Basic
-            --priority {{ 110 + (vm_short_name | int - 1) * 10 }}
-            --http-listener listener-{{ vm_short_name }}
-            --address-pool pool-{{ vm_short_name }}
-            --http-settings openclaw-backend-settings
-            --output json
-      register: rule_result
-      changed_when: "'provisioningState' in rule_result.stdout"
+      changed_when: true
 
 # ═══════════════════════════════════════════════════════════
 # Play 2: Configure OpenClaw Gateway + AOAI on VM via SSH
@@ -211,6 +191,7 @@
 - name: Configure OpenClaw Gateway
   hosts: openclaw_vm
   gather_facts: false
+  ignore_unreachable: true
 
   vars:
     user_config_dir: 'C:\Users\{{ vm_admin_user_fact }}\.openclaw'
@@ -311,6 +292,14 @@
     # --- Configure launcher and service ---
     # Packer image ships with --bind loopback; must rewrite to --bind lan
     # so App Gateway can reach port 18789.
+    - name: Open Windows Firewall for gateway port
+      ansible.windows.win_shell: !unsafe |
+        New-NetFirewallRule -DisplayName "OpenClaw Gateway" `
+          -Direction Inbound -Protocol TCP `
+          -LocalPort $env:GW_PORT -Action Allow -Profile Any
+      environment:
+        GW_PORT: "{{ openclaw_port }}"
+
     - name: Write gateway launcher script (bind to LAN)
       ansible.windows.win_shell: !unsafe |
         $launcher = @"
@@ -414,7 +403,7 @@
           ║  AOAI:    {{ aoai_endpoint_fact }}
           ║  Auth:    API Key (static)
           ║  Model:   auto-gen-chat/{{ aoai_deployment_fact }}
-          ║  URL:     https://{{ vm_name_fact }}.{{ appgw_public_ip_fact }}.nip.io
+          ║  URL:     https://{{ vm_name_fact }}.{{ appgw_public_ip_fact | replace('.', '-') }}.nip.io
           ╚══════════════════════════════════════════════════╝
 
     - name: Set deployment record
@@ -424,7 +413,7 @@
           ip: "{{ inventory_hostname }}"
           port: "{{ openclaw_port }}"
           token: "{{ token_result.stdout | trim }}"
-          url: "https://{{ vm_name_fact }}.{{ appgw_public_ip_fact }}.nip.io"
+          url: "https://{{ vm_name_fact }}.{{ appgw_public_ip_fact | replace('.', '-') }}.nip.io"
           admin_user: "{{ vm_admin_user_fact }}"
           model: "auto-gen-chat/{{ aoai_deployment_fact }}"
           deployed_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
@@ -440,7 +429,7 @@
   tasks:
     - name: Get deployed VM info from previous play
       ansible.builtin.set_fact:
-        new_vm: "{{ hostvars[groups['openclaw_vm'][0]].vm_record }}"
+        new_vm: "{{ hostvars[vm_private_ip].vm_record }}"
 
     - name: Ensure vms.yml exists
       ansible.builtin.copy:

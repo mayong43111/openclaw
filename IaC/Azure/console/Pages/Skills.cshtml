@@ -1,0 +1,302 @@
+@page
+@model OpenClaw.Console.Pages.SkillsModel
+@{
+    ViewData["Title"] = "技能插件管控";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>🧩 技能插件管控</h2>
+    <div>
+        <button class="btn btn-outline-primary" disabled>
+            <span class="me-1">📦</span> 上传技能
+        </button>
+        <button class="btn btn-outline-secondary ms-2" disabled>
+            <span class="me-1">🔄</span> 同步仓库
+        </button>
+    </div>
+</div>
+
+<!-- Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">24</h5>
+                <p class="card-text text-muted">技能总数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h5 class="card-title text-success">18</h5>
+                <p class="card-text text-muted">已批准</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body">
+                <h5 class="card-title text-warning">4</h5>
+                <p class="card-text text-muted">待审核</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body">
+                <h5 class="card-title text-danger">2</h5>
+                <p class="card-text text-muted">已阻止</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 技能仓库 (Docker-like) -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>📦 技能仓库 — Internal Repository</strong>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width:150px;" disabled>
+                <option selected>All Status</option>
+                <option>已批准</option>
+                <option>Pending</option>
+                <option>已阻止</option>
+            </select>
+            <input type="text" class="form-control form-control-sm" style="width:200px;" placeholder="Search skills..." disabled>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>技能名称</th>
+                    <th>版本</th>
+                    <th>发布者</th>
+                    <th>安全扫描</th>
+                    <th>状态</th>
+                    <th>Installed On</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div>
+                            <strong>web_search</strong>
+                            <br><small class="text-muted">Search the web using Brave Search API</small>
+                        </div>
+                    </td>
+                    <td><code>1.3.2</code></td>
+                    <td><span class="badge bg-primary">官方</span></td>
+                    <td><span class="badge bg-success">✓ Passed</span></td>
+                    <td><span class="badge bg-success">已批准</span></td>
+                    <td>6 / 8 agents</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info" disabled>Details</button>
+                        <button class="btn btn-sm btn-outline-danger" disabled>Revoke</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div>
+                            <strong>code_interpreter</strong>
+                            <br><small class="text-muted">Execute Python code in sandbox</small>
+                        </div>
+                    </td>
+                    <td><code>2.1.0</code></td>
+                    <td><span class="badge bg-primary">官方</span></td>
+                    <td><span class="badge bg-success">✓ Passed</span></td>
+                    <td><span class="badge bg-success">已批准</span></td>
+                    <td>4 / 8 agents</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info" disabled>Details</button>
+                        <button class="btn btn-sm btn-outline-danger" disabled>Revoke</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div>
+                            <strong>sql_query</strong>
+                            <br><small class="text-muted">Execute read-only SQL queries</small>
+                        </div>
+                    </td>
+                    <td><code>1.0.5</code></td>
+                    <td><span class="badge bg-secondary">内部</span></td>
+                    <td><span class="badge bg-success">✓ Passed</span></td>
+                    <td><span class="badge bg-success">已批准</span></td>
+                    <td>3 / 8 agents</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info" disabled>Details</button>
+                        <button class="btn btn-sm btn-outline-danger" disabled>Revoke</button>
+                    </td>
+                </tr>
+                <tr class="table-warning">
+                    <td>
+                        <div>
+                            <strong>email_sender</strong>
+                            <br><small class="text-muted">Send emails via SMTP gateway</small>
+                        </div>
+                    </td>
+                    <td><code>0.9.1</code></td>
+                    <td><span class="badge bg-secondary">内部</span></td>
+                    <td><span class="badge bg-warning text-dark">⚠ Review</span></td>
+                    <td><span class="badge bg-warning text-dark">Pending</span></td>
+                    <td>—</td>
+                    <td>
+                        <button class="btn btn-sm btn-success" disabled>Approve</button>
+                        <button class="btn btn-sm btn-outline-danger" disabled>Reject</button>
+                    </td>
+                </tr>
+                <tr class="table-warning">
+                    <td>
+                        <div>
+                            <strong>crm_integration</strong>
+                            <br><small class="text-muted">Salesforce CRM data read/write</small>
+                        </div>
+                    </td>
+                    <td><code>1.2.0</code></td>
+                    <td><span class="badge bg-info">第三方</span></td>
+                    <td><span class="badge bg-warning text-dark">⏳ Scanning</span></td>
+                    <td><span class="badge bg-warning text-dark">Pending</span></td>
+                    <td>—</td>
+                    <td>
+                        <button class="btn btn-sm btn-success" disabled>Approve</button>
+                        <button class="btn btn-sm btn-outline-danger" disabled>Reject</button>
+                    </td>
+                </tr>
+                <tr class="table-danger">
+                    <td>
+                        <div>
+                            <strong>shell_exec</strong>
+                            <br><small class="text-muted">Execute arbitrary shell commands</small>
+                        </div>
+                    </td>
+                    <td><code>1.0.0</code></td>
+                    <td><span class="badge bg-info">第三方</span></td>
+                    <td><span class="badge bg-danger">✗ Failed</span></td>
+                    <td><span class="badge bg-danger">已阻止</span></td>
+                    <td>—</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info" disabled>Scan Report</button>
+                    </td>
+                </tr>
+                <tr class="table-danger">
+                    <td>
+                        <div>
+                            <strong>data_exfiltrator</strong>
+                            <br><small class="text-muted">Transfer files to external endpoints</small>
+                        </div>
+                    </td>
+                    <td><code>0.3.0</code></td>
+                    <td><span class="badge bg-dark">Unknown</span></td>
+                    <td><span class="badge bg-danger">✗ Malicious</span></td>
+                    <td><span class="badge bg-danger">已阻止</span></td>
+                    <td>—</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info" disabled>Scan Report</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Skill 安装规则 -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>🚫 安装规则</strong></div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Block public registry</strong>
+                            <br><small class="text-muted">Prevent installing unreviewed skills from public sources</small>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" checked disabled style="width:3em;height:1.5em;">
+                        </div>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Require security scan</strong>
+                            <br><small class="text-muted">All skills must pass vulnerability scan before approval</small>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" checked disabled style="width:3em;height:1.5em;">
+                        </div>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>官方技能自动批准</strong>
+                            <br><small class="text-muted">Automatically approve skills from OpenClaw official registry</small>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" checked disabled style="width:3em;height:1.5em;">
+                        </div>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>第三方技能需管理员审批</strong>
+                            <br><small class="text-muted">Third-party skills need manual admin review</small>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" checked disabled style="width:3em;height:1.5em;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>📊 技能使用统计</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>技能</th>
+                            <th>Calls (24h)</th>
+                            <th>平均延迟</th>
+                            <th>错误率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>web_search</code></td>
+                            <td>1,247</td>
+                            <td>320ms</td>
+                            <td><span class="text-success">0.2%</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>code_interpreter</code></td>
+                            <td>856</td>
+                            <td>1.2s</td>
+                            <td><span class="text-success">1.1%</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>sql_query</code></td>
+                            <td>432</td>
+                            <td>180ms</td>
+                            <td><span class="text-success">0.5%</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>doc_qa</code></td>
+                            <td>298</td>
+                            <td>2.1s</td>
+                            <td><span class="text-warning">3.2%</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>image_gen</code></td>
+                            <td>156</td>
+                            <td>4.5s</td>
+                            <td><span class="text-success">0.8%</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

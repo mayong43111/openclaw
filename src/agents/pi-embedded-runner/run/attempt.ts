@@ -15,6 +15,7 @@ import {
   ensureGlobalUndiciEnvProxyDispatcher,
   ensureGlobalUndiciStreamTimeouts,
 } from "../../../infra/net/undici-global-dispatcher.js";
+import { ensureAzureOpenAiFetchInterceptor } from "../../../infra/net/azure-fetch-interceptor.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import type {
@@ -1376,6 +1377,7 @@ export async function runEmbeddedAttempt(
   // active EnvHttpProxyAgent instead of being replaced by a bare proxy dispatcher.
   ensureGlobalUndiciEnvProxyDispatcher();
   ensureGlobalUndiciStreamTimeouts();
+  ensureAzureOpenAiFetchInterceptor();
 
   log.debug(
     `embedded run start: runId=${params.runId} sessionId=${params.sessionId} provider=${params.provider} model=${params.modelId} thinking=${params.thinkLevel} messageChannel=${params.messageChannel ?? params.messageProvider ?? "unknown"}`,

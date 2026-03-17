@@ -33,6 +33,11 @@ variable "openclaw_version" {
   default = "2026.3.12"
 }
 
+variable "python_version" {
+  type    = string
+  default = "3.12.9"
+}
+
 variable "image_resource_group" {
   type    = string
   default = "rg-openclaw-images"
@@ -80,7 +85,7 @@ source "azure-arm" "windows" {
 
   # Output: Managed Image
   managed_image_resource_group_name = var.image_resource_group
-  managed_image_name                = "openclaw-windows-${var.openclaw_version}"
+  managed_image_name                = "openclaw-windows-${var.openclaw_version}-${formatdate("YYYYMMDDhhmm", timestamp())}"
 
   # Tags applied to ALL resources Packer creates (build VM, KV, disks, NIC, image).
   # SecurityControl=Ignore bypasses org compliance policies on temp resources.
@@ -109,7 +114,25 @@ build {
     script = "scripts/install-git.ps1"
   }
 
-  # 3. Install OpenClaw
+  # 3. Install Python
+  provisioner "powershell" {
+    script = "scripts/install-python.ps1"
+    environment_vars = [
+      "PYTHON_VERSION=${var.python_version}"
+    ]
+  }
+
+  # 4. Install common tools (7-Zip, curl, jq, FFmpeg, pwsh, Chromium, etc.)
+  provisioner "powershell" {
+    script = "scripts/install-common-tools.ps1"
+  }
+
+  # 5. Install Visual Studio 2022 Build Tools (C++ workload for native modules)
+  provisioner "powershell" {
+    script = "scripts/install-vsbuildtools.ps1"
+  }
+
+  # 6. Install OpenClaw
   provisioner "powershell" {
     script = "scripts/install-openclaw.ps1"
     environment_vars = [
@@ -117,20 +140,19 @@ build {
     ]
   }
 
-  # 4. Register OpenClaw as a Windows Service + firewall
+  # 7. Register OpenClaw as a Windows Service + firewall
   provisioner "powershell" {
     script = "scripts/register-openclaw-service.ps1"
   }
 
-  # 5. Enable OpenSSH Server for post-deploy Ansible access
-  #    Uses elevated script (Add-WindowsCapability requires admin)
+  # 8. Enable OpenSSH Server for post-deploy Ansible access
   provisioner "powershell" {
     elevated_user     = "packer"
     elevated_password = build.Password
     script            = "scripts/configure-ssh.ps1"
   }
 
-  # 6. Sysprep (required for Azure managed images)
+  # 9. Sysprep (required for Azure managed images)
   provisioner "powershell" {
     inline = [
       "Write-Output '=== Running Sysprep ==='",
