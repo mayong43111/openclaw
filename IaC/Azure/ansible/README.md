@@ -1,6 +1,41 @@
-# OpenClaw Windows VM Deployment Guide
+# OpenClaw Windows VM — Ansible Playbooks
 
-使用 Packer 预构建镜像部署 OpenClaw Gateway 到 Azure Windows VM。
+使用 Packer 预构建镜像部署 OpenClaw Gateway 到 Azure Windows VM。  
+支持**两种使用模式**：Console 自动化 和 手动 CLI。
+
+---
+
+## 架构概览
+
+```
+                                 ┌─ Console 自动化模式 ─────────────────────┐
+                                 │  Console UI → Queue → TaskWorkerService │
+                                 │  → ansible-playbook deploy-vm.yml       │
+                                 │  → 解析 stdout 获取 IP/Token/URL        │
+                                 │  → 写入 Table Storage                   │
+                                 └─────────────────────────────────────────┘
+
+                                 ┌─ 手动 CLI 模式 ─────────────────────────┐
+                                 │  SSH → ansible-playbook deploy-vm.yml   │
+                                 │  → Play 3 写入本地文件:                 │
+                                 │    vms.yml / hosts.yml / host_vars/     │
+                                 │  → configure-vm.yml 可用这些 inventory  │
+                                 └─────────────────────────────────────────┘
+```
+
+### 路由方式
+
+VM 通过 Private DNS Zone (`openclaw.internal`) 注册，nginx 使用 Azure DNS resolver (`168.63.129.16`) 按主机名路由到对应 VM。新增/删除 VM 无需重建容器。
+
+| 组件 | 说明 |
+|---|---|
+| DNS Zone | `openclaw.internal` (linked to VNet) |
+| A Record | `vm-ymms-openclaw-XX.openclaw.internal` → VM 私有 IP |
+| TTL | 10s (快速切换) |
+| nginx | `resolver 168.63.129.16`，变量 `proxy_pass` 实现每请求 DNS 解析 |
+| nip.io | `*.20-38-7-158.nip.io`（dashed 格式避免 IP 解析歧义） |
+
+---
 
 ## 镜像信息
 
@@ -10,103 +45,106 @@
 | Resource Group | `rg-openclaw-images` |
 | Location | `westus3` |
 | OS | Windows Server 2022 Datacenter |
-| VM Size | `Standard_D2s_v5` (推荐) |
+| VM Size | `Standard_D2s_v5` |
 
 ### 镜像预装内容
 
 - Node.js 22.16.0
 - Git 2.53.0 (via Chocolatey)
-- OpenClaw 2026.3.12 (安装在 `C:\openclaw`，已加入系统 PATH)
-- NSSM (Windows Service 管理器)
-- OpenClawGateway Windows Service (已注册，手动启动模式)
+- OpenClaw 2026.3.12 (`C:\openclaw`，已加入 PATH)
+- NSSM (Windows Service 管理器，部署时禁用，改用 Scheduled Task)
 
-> **注意**: 镜像不包含 CA 证书或 TLS 证书。证书应在部署后通过 Ansible 或手动配置。WinRM 使用 Azure 默认自签名证书。
-
-### 镜像中的关键路径
+### 关键路径
 
 | 路径 | 说明 |
 |---|---|
-| `C:\openclaw\` | OpenClaw 安装目录 (npm global prefix) |
-| `C:\openclaw-gateway.cmd` | Gateway 启动脚本 |
+| `C:\openclaw\` | OpenClaw 安装目录 |
+| `C:\openclaw-gateway.cmd` | Gateway 启动脚本 (bind lan) |
+| `C:\Users\azureuser\.openclaw\openclaw.json` | 用户级配置 (含 token) |
 
 ---
 
-## 快速部署
+## Playbook 文件说明
 
-### 1. 从镜像创建 VM
+| 文件 | 用途 | 模式 |
+|---|---|---|
+| `deploy-vm.yml` | 创建 VM + 配置 Gateway + DNS 注册 + 本地 registry | 两种模式共用 |
+| `remove-vm.yml` | 删除 VM + DNS 清理 + 本地 registry 清理 | 两种模式共用 |
+| `configure-vm.yml` | 重新配置已有 VM 的 Gateway/AOAI | 仅手动模式 |
+| `group_vars/all.yml` | 默认变量（命名、镜像、AOAI 等） | 两种模式共用 |
+| `inventory/hosts.yml` | Ansible inventory（由 Play 3 自动生成） | 仅手动模式 |
+| `inventory/host_vars/*.yml` | 每 VM 的变量（由 Play 3 自动生成） | 仅手动模式 |
+| `vms.yml` | VM 注册表（由 Play 3 自动生成） | 仅手动模式 |
+
+> **Note**: `vms.yml` 和 `inventory/host_vars/` 已加入 `.gitignore`，包含敏感数据不提交。
+
+---
+
+## 模式 A: Console 自动化
+
+通过 Console Web UI 创建/删除 VM，无需 SSH。
+
+**流程**: Console UI → Azure Queue → TaskWorkerService → `ansible-playbook` → 解析 stdout
+
+TaskWorkerService 从 Play 2 的 `Display connection info` 输出中解析 `IP`、`Token`、`URL`，写入 Table Storage。Play 3 写入的本地文件在容器中是临时的，不被读取。
+
+无需手动操作。
+
+---
+
+## 模式 B: 手动 CLI
+
+SSH 到 ansible 控制机后直接运行 playbook。
+
+### 部署新 VM
 
 ```bash
-az vm create \
-  --resource-group <RESOURCE_GROUP> \
-  --name <VM_NAME> \
-  --image openclaw-windows-2026.3.12 \
-  --size Standard_D2s_v5 \
-  --admin-username azureuser \
-  --admin-password '<PASSWORD>' \
-  --location westus3 \
-  --nsg-rule RDP \
-  --public-ip-sku Standard
+ansible-playbook deploy-vm.yml \
+  -e vm_name=vm-ymms-openclaw-12 \
+  -e vm_admin_password='<PASSWORD>' \
+  -e aoai_api_key='<KEY>'
 ```
 
-> **注意**: Windows 计算机名不能超过 15 个字符。
+deploy-vm.yml 执行三个 Play:
+1. **Play 1**: 创建 NIC、VM、获取 IP、注册 DNS A 记录
+2. **Play 2**: SSH 配置 Gateway (mode, AOAI, firewall, scheduled task, 重启, 获取 token)
+3. **Play 3**: 写入本地文件 (`vms.yml`, `host_vars/`, `hosts.yml`)，供后续 `configure-vm.yml` 使用
 
-### 2. 开放 Gateway 端口 (NSG)
+### 重新配置已有 VM
 
 ```bash
-az network nsg rule create \
-  --resource-group <RESOURCE_GROUP> \
-  --nsg-name <VM_NAME>NSG \
-  --name AllowOpenClaw \
-  --priority 1010 \
-  --direction Inbound \
-  --access Allow \
-  --protocol Tcp \
-  --destination-port-ranges 18789
+ansible-playbook configure-vm.yml -i inventory/ \
+  -e aoai_api_key='<KEY>' \
+  -e ansible_password='<PASSWORD>'
 ```
 
-### 3. 初始化配置并启动服务
+> `ansible_password` 不存储在 host_vars（安全考虑），必须通过 `-e` 提供。
 
-通过 `az vm run-command` 或 Ansible 在 VM 上执行:
+### 删除 VM
 
-```powershell
-# 刷新 PATH
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-
-# 初始化 gateway 配置
-openclaw config set gateway.mode local
-
-# 启用远程访问 (绑定到 LAN)
-# 修改 launcher 脚本
-$launcher = @"
-@echo off
-set PATH=C:\Program Files\nodejs;C:\openclaw;C:\Program Files\Git\bin;%PATH%
-openclaw gateway run --bind lan --port 18789
-"@
-Set-Content "C:\openclaw-gateway.cmd" $launcher -Encoding ASCII
-
-# Control UI 允许远程访问 (二选一)
-# 方式 A: 允许 Host Header 回退 (快速但安全性较低)
-openclaw config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true
-
-# 方式 B: 指定允许的 Origin (推荐生产环境)
-# openclaw config set gateway.controlUi.allowedOrigins "https://your-domain.com"
-
-# 设置服务自动启动并启动
-sc.exe config OpenClawGateway start= auto
-Start-Service OpenClawGateway
+```bash
+ansible-playbook remove-vm.yml -e vm_name=vm-ymms-openclaw-12
 ```
 
-### 4. 启用 HTTPS (TLS)
+清理顺序: DNS A 记录 → VM + OS disk + data disks + NIC → 本地文件
 
-部署后需要生成 TLS 证书。可以使用自签名证书或 CA 签名证书:
+### 查看已部署 VM
 
-#### 方式 A: 自签名证书 (快速)
+```bash
+cat vms.yml
+```
+
+---
+
+## TLS 证书 (可选)
+
+当前通过 AppGW 提供 HTTPS 终止（wildcard nip.io 证书），VM 之间走 HTTP。
+如需 VM 本地 TLS，可使用自签名证书:
 
 ```powershell
 $tlsDir = "C:\openclaw-tls"
 New-Item -Path $tlsDir -ItemType Directory -Force
 
-# 生成自签名证书
 $vmIP = "<ACTUAL_VM_IP>"
 $cert = New-SelfSignedCertificate `
     -Subject "CN=OpenClaw Gateway" `
@@ -130,103 +168,21 @@ openclaw config set gateway.tls.certPath "C:\openclaw-tls\cert.pem"
 openclaw config set gateway.tls.keyPath "C:\openclaw-tls\key.pem"
 openclaw config set gateway.tls.autoGenerate false
 
-# 重启服务
-Restart-Service OpenClawGateway
-```
-
-#### 方式 B: CA 签名证书 (推荐生产环境)
-
-由 Ansible playbook 生成 CA 和 TLS 证书，参考 Ansible 配置管理部分。
-
-### 5. 获取 Gateway Token
-
-服务首次启动时会自动生成 token:
-
-```powershell
-$configFile = "C:\Windows\system32\config\systemprofile\.openclaw\openclaw.json"
-$cfg = Get-Content $configFile -Raw | ConvertFrom-Json
-$cfg.gateway.auth.token
-```
-
-> **说明**: 服务以 SYSTEM 账户运行，配置文件位于 `C:\Windows\system32\config\systemprofile\.openclaw\openclaw.json`。
-
----
-
-## 为实际 IP 重新生成 TLS 证书
-
-如果已有 CA 证书，可以用 CA 签发包含实际 IP 的 TLS 证书:
-
-```powershell
-$caDir = "C:\openclaw-ca"
-$tlsDir = "C:\openclaw-tls"
-$vmIP = "<ACTUAL_VM_IP>"
-
-# 导入 CA (需要 CA PFX 文件，由 Ansible 部署到 VM)
-$caPassword = ConvertTo-SecureString -String "openclaw-ca-internal" -Force -AsPlainText
-$caCert = Import-PfxCertificate -FilePath "$caDir\openclaw-ca.pfx" -CertStoreLocation "Cert:\LocalMachine\My" -Password $caPassword
-
-# 生成新证书 (包含实际 IP)
-$newCert = New-SelfSignedCertificate `
-    -Subject "CN=OpenClaw Gateway" `
-    -DnsName "localhost", $vmIP `
-    -KeyLength 2048 -KeyAlgorithm RSA -HashAlgorithm SHA256 `
-    -KeyExportPolicy Exportable `
-    -NotAfter (Get-Date).AddYears(5) `
-    -CertStoreLocation "Cert:\LocalMachine\My" `
-    -Signer $caCert `
-    -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1","2.5.29.17={text}IPAddress=$vmIP&DNS=localhost")
-
-# 导出 PEM
-$openssl = "C:\Program Files\Git\usr\bin\openssl.exe"
-$certPass = ConvertTo-SecureString -String "openclaw-tls" -Force -AsPlainText
-Export-PfxCertificate -Cert $newCert -FilePath "$tlsDir\openclaw.pfx" -Password $certPass
-& $openssl pkcs12 -in "$tlsDir\openclaw.pfx" -clcerts -nokeys -out "$tlsDir\cert.pem" -passin pass:openclaw-tls
-& $openssl pkcs12 -in "$tlsDir\openclaw.pfx" -nocerts -nodes -out "$tlsDir\key.pem" -passin pass:openclaw-tls
-
-# 清理 CA 私钥
-Remove-Item "Cert:\LocalMachine\My\$($caCert.Thumbprint)" -ErrorAction SilentlyContinue
-
-# 重启
-Restart-Service OpenClawGateway
+# 重启 Scheduled Task
+Stop-ScheduledTask -TaskName 'OpenClawGateway'
+Start-ScheduledTask -TaskName 'OpenClawGateway'
 ```
 
 ---
 
-## WinRM (Ansible 管理)
+## SSH 连接 (Ansible → VM)
 
-### 默认行为
-
-VM 使用 Azure 默认的 WinRM 自签名 HTTPS 监听器 (端口 5986)。无需额外配置即可通过 Ansible 连接。
-
-### Ansible 连接配置
-
-```yaml
-# inventory
-[openclaw_windows]
-20.14.23.70
-
-[openclaw_windows:vars]
-ansible_user=azureuser
-ansible_password=<PASSWORD>
-ansible_connection=winrm
-ansible_winrm_transport=basic
-ansible_winrm_server_cert_validation=ignore
-ansible_port=5986
-ansible_winrm_scheme=https
-```
-
-### 开放 WinRM 端口 (NSG)
+deploy-vm.yml 使用 SSH (`ansible_connection: ssh`, `ansible_shell_type: powershell`) 连接 VM。
+VM 没有公网 IP，Ansible 控制机必须在同一 VNet 或通过 VPN/bastion 连接。
 
 ```bash
-az network nsg rule create \
-  --resource-group <RESOURCE_GROUP> \
-  --nsg-name <VM_NAME>NSG \
-  --name AllowWinRM \
-  --priority 1020 \
-  --direction Inbound \
-  --access Allow \
-  --protocol Tcp \
-  --destination-port-ranges 5986
+# 手动测试 SSH
+ssh azureuser@10.0.1.X
 ```
 
 ---
@@ -237,8 +193,9 @@ az network nsg rule create \
 |---|---|---|
 | `--force` 参数导致 gateway 崩溃 | Windows 无 `fuser`/`lsof` | launcher 脚本中不使用 `--force` |
 | npm 安装在用户目录导致 Sysprep 后丢失 | Sysprep 删除用户配置文件 | npm prefix 设为 `C:\openclaw` (系统级) |
-| Em dash 字符导致 PS 脚本解析失败 | WinRM 传输编码问题 | 脚本中只使用 ASCII 字符 |
-| Control UI 安全上下文要求 | 非 loopback 绑定需要 origin 配置 | 设置 `allowedOrigins` 或使用回退模式 |
+| Em dash 字符导致 PS 脚本解析失败 | SSH 传输编码问题 | 脚本中只使用 ASCII 字符 |
+| Windows 防火墙阻止 18789 | 新 VM 无防火墙规则 | deploy-vm.yml 已自动添加 `New-NetFirewallRule` |
+| nip.io IP 解析歧义 | `vm-11.20.38.7.158.nip.io` 解析到 `11.20.38.7` | 使用 dashed 格式 `20-38-7-158.nip.io` |
 
 ---
 
@@ -246,9 +203,8 @@ az network nsg rule create \
 
 | 协议 | URL |
 |---|---|
-| HTTPS | `https://<VM_IP>:18789` |
-| WSS | `wss://<VM_IP>:18789` |
-| WinRM | `https://<VM_IP>:5986` |
+| HTTPS (via AppGW) | `https://vm-ymms-openclaw-XX.20-38-7-158.nip.io` |
+| HTTP (内网直连) | `http://<VM_PRIVATE_IP>:18789` |
+| SSH | `ssh azureuser@<VM_PRIVATE_IP>` |
 
-Gateway token 从配置文件读取:
-`C:\Windows\system32\config\systemprofile\.openclaw\openclaw.json` -> `gateway.auth.token`
+Gateway token 路径: `C:\Users\azureuser\.openclaw\openclaw.json` → `gateway.auth.token`

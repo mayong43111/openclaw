@@ -419,9 +419,14 @@
           deployed_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
 
 # ═══════════════════════════════════════════════════════════
-# Play 3: Save VM record to local registry
+# Play 3: Save VM record to local registry (for manual mode)
 # ═══════════════════════════════════════════════════════════
-- name: Save VM record to local registry
+# When running via Console (TaskWorkerService), connection info is parsed
+# from the Play 2 "Display connection info" stdout block (IP/Token/URL).
+# This Play 3 writes local files (vms.yml, host_vars, hosts.yml) that are
+# useful for manual ansible operations (e.g. configure-vm.yml -i inventory/).
+# In the container these files are ephemeral but harmless.
+- name: Save VM record to local registry (manual mode inventory)
   hosts: localhost
   connection: local
   gather_facts: false

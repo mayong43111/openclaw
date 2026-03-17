@@ -1,13 +1,16 @@
 ---
 # configure-vm.yml - Reconfigure OpenClaw Gateway on existing VM(s)
-# Uses inventory file for target hosts.
+#
+# Manual mode only — requires inventory populated by deploy-vm.yml Play 3.
+# (hosts.yml + host_vars/ are written during deployment)
 #
 # Usage:
-#   ansible-playbook configure-vm.yml -i inventory/ -e aoai_api_key=xxx
-#   make vm-configure AOAI_API_KEY=xxx
+#   ansible-playbook configure-vm.yml -i inventory/ \
+#     -e aoai_api_key=xxx -e ansible_password='<PASSWORD>'
 #
 # Required extra vars:
 #   aoai_api_key       - Azure OpenAI API key
+#   ansible_password   - VM admin password (not stored in host_vars for security)
 #
 # Optional extra vars (override group_vars/all.yml):
 #   aoai_endpoint      - AOAI endpoint (default: aif-auto-gen-chat.openai.azure.com)

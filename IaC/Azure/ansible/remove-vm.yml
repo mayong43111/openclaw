@@ -159,17 +159,23 @@
           OS disk={{ 'deleted' if (os_disk_delete.rc | default(-1)) == 0 else 'absent/skipped' }},
           NIC={{ 'deleted' if nic_check.rc == 0 else 'absent' }}
 
-    # ── Local registry cleanup ───────────────────────────────
+    # ── Local registry cleanup (best-effort, files may not exist after container restart) ──
     - name: Remove host_vars file
       ansible.builtin.file:
         path: "{{ playbook_dir }}/inventory/host_vars/{{ vm_name }}.yml"
         state: absent
+
+    - name: Check if hosts.yml exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/inventory/hosts.yml"
+      register: hosts_file
 
     - name: Remove VM from hosts.yml
       ansible.builtin.lineinfile:
         path: "{{ playbook_dir }}/inventory/hosts.yml"
         regexp: "^\\s+{{ vm_name }}:"
         state: absent
+      when: hosts_file.stat.exists
 
     - name: Load vms.yml registry
       ansible.builtin.slurp:
@@ -214,7 +220,7 @@
           ╔══════════════════════════════════════════════════╗
           ║  VM Removed: {{ vm_name }}
           ╠══════════════════════════════════════════════════╣
-          ║  App Gateway: rule/listener/pool cleaned up
+          ║  DNS:   {{ vm_name }}.openclaw.internal cleaned up
           ║  Azure: VM + OS disk + data disks + NIC deleted
           ║  Local: vms.yml + host_vars + hosts.yml updated
           ╚══════════════════════════════════════════════════╝

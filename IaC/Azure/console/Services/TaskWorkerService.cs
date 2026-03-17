@@ -152,17 +152,17 @@ public class TaskWorkerService : BackgroundService
         if (exitCode == 0)
         {
             _logger.LogInformation("deploy-vm.yml succeeded for {VmName}", task.VmName);
-            await UpdateTableFromVmsRegistryAsync(task.VmName);
+            await UpdateTableFromAnsibleOutputAsync(task.VmName, output);
             await _logService.AppendAsync(task.VmName, "create", $"[{DateTime.UtcNow:HH:mm:ss}] ✅ deploy-vm.yml succeeded", isFinal: true, exitCode: 0);
         }
         else
         {
-            var hostVarsPath = Path.Combine(_ansibleDir, "inventory", "host_vars", $"{task.VmName}.yml");
-            if (File.Exists(hostVarsPath))
+            // Check if Ansible output contains connection info (partial success — VM was created but a later step failed)
+            if (output.Contains("Token:") && output.Contains("IP:"))
             {
-                _logger.LogWarning("deploy-vm.yml exited {ExitCode} but host_vars exists — treating as success for {VmName}", exitCode, task.VmName);
-                await UpdateTableFromVmsRegistryAsync(task.VmName);
-                await _logService.AppendAsync(task.VmName, "create", $"[{DateTime.UtcNow:HH:mm:ss}] ⚠️ deploy-vm.yml exited {exitCode} but host_vars exists — treating as success", isFinal: true, exitCode: exitCode);
+                _logger.LogWarning("deploy-vm.yml exited {ExitCode} but connection info present — treating as success for {VmName}", exitCode, task.VmName);
+                await UpdateTableFromAnsibleOutputAsync(task.VmName, output);
+                await _logService.AppendAsync(task.VmName, "create", $"[{DateTime.UtcNow:HH:mm:ss}] ⚠️ deploy-vm.yml exited {exitCode} but VM info found — treating as success", isFinal: true, exitCode: exitCode);
             }
             else
             {
@@ -368,53 +368,35 @@ public class TaskWorkerService : BackgroundService
         return (proc.ExitCode, combined);
     }
 
-    private async Task UpdateTableFromVmsRegistryAsync(string vmName)
+    /// <summary>
+    /// Parse VM connection info directly from Ansible stdout output.
+    /// This avoids dependency on ephemeral local files (host_vars, vms.yml)
+    /// which are lost when the container restarts.
+    ///
+    /// deploy-vm.yml prints a structured block like:
+    ///   ║  IP:      10.0.1.4
+    ///   ║  Token:   abc123...
+    ///   ║  URL:     https://vm-ymms-openclaw-11.20-38-7-158.nip.io
+    /// </summary>
+    private async Task UpdateTableFromAnsibleOutputAsync(string vmName, string output)
     {
-        // After deploy-vm.yml, read the generated host_vars file for this VM
-        var hostVarsPath = Path.Combine(_ansibleDir, "inventory", "host_vars", $"{vmName}.yml");
-        if (!File.Exists(hostVarsPath))
-        {
-            _logger.LogWarning("host_vars file not found: {Path}", hostVarsPath);
-            return;
-        }
-
-        // Parse simple YAML key-value (ansible_host, openclaw_token, deployed_at)
-        var lines = await File.ReadAllLinesAsync(hostVarsPath);
-        var props = new Dictionary<string, string>();
-        foreach (var line in lines)
-        {
-            var trimmed = line.Trim();
-            if (trimmed.StartsWith('#') || !trimmed.Contains(':')) continue;
-            var parts = trimmed.Split(':', 2);
-            props[parts[0].Trim()] = parts[1].Trim().Trim('"');
-        }
-
         var vm = await _table.GetAsync(vmName) ?? new VmRecord { RowKey = vmName };
         vm.Status = "ready";
-        if (props.TryGetValue("ansible_host", out var ip)) vm.VmIp = ip;
-        if (props.TryGetValue("openclaw_token", out var token)) vm.Token = token;
 
-        // Build URL from App Gateway PIP (read from vms.yml registry)
-        var vmsPath = Path.Combine(_ansibleDir, "vms.yml");
-        if (File.Exists(vmsPath))
+        // Parse key-value pairs from the Ansible connection info block
+        foreach (var line in output.Split('\n'))
         {
-            var vmsContent = await File.ReadAllTextAsync(vmsPath);
-            // Find url for this VM name
-            var urlPrefix = $"url: \"";
-            var nameMarker = $"name: \"{vmName}\"";
-            var idx = vmsContent.IndexOf(nameMarker, StringComparison.Ordinal);
-            if (idx >= 0)
-            {
-                var urlIdx = vmsContent.IndexOf(urlPrefix, idx, StringComparison.Ordinal);
-                if (urlIdx >= 0)
-                {
-                    var urlStart = urlIdx + urlPrefix.Length;
-                    var urlEnd = vmsContent.IndexOf('"', urlStart);
-                    if (urlEnd > urlStart)
-                        vm.Url = vmsContent[urlStart..urlEnd];
-                }
-            }
+            var trimmed = line.Trim().TrimStart('║').Trim();
+            if (trimmed.StartsWith("IP:", StringComparison.Ordinal))
+                vm.VmIp = trimmed["IP:".Length..].Trim();
+            else if (trimmed.StartsWith("Token:", StringComparison.Ordinal))
+                vm.Token = trimmed["Token:".Length..].Trim();
+            else if (trimmed.StartsWith("URL:", StringComparison.Ordinal))
+                vm.Url = trimmed["URL:".Length..].Trim();
         }
+
+        if (string.IsNullOrEmpty(vm.VmIp))
+            _logger.LogWarning("Could not parse IP from Ansible output for {VmName}", vmName);
 
         await _table.UpsertAsync(vm);
     }
