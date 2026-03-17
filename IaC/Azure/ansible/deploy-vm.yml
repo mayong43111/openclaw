@@ -153,7 +153,7 @@
         ansible_password: "{{ vm_admin_password }}"
         ansible_connection: ssh
         ansible_shell_type: powershell
-        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
         vm_name_fact: "{{ vm_name }}"
         vm_admin_user_fact: "{{ vm_admin_user }}"
         aoai_endpoint_fact: "{{ aoai_endpoint }}"
@@ -502,7 +502,7 @@
                 vars:
                   ansible_connection: ssh
                   ansible_shell_type: powershell
-                  ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+                  ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                 hosts:
           {% for vm in vm_list_updated %}
                   {{ vm.name }}:
