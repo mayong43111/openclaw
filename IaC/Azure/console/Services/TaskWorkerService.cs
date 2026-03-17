@@ -202,12 +202,13 @@ public class TaskWorkerService : BackgroundService
     private async Task HandleRestartAsync(VmTaskMessage task, CancellationToken ct)
     {
         // Restart = SSH into VM and restart the scheduled task
-        // For now, use az vm run-command as a simple approach
         var vm = await _table.GetAsync(task.VmName);
         if (vm is null) return;
 
         var rg = _config["Azure:ResourceGroup"] ?? "rg-ymms-openclaw-infra";
         var script = "Get-ScheduledTask -TaskName 'OpenClawGateway' | Stop-ScheduledTask; Start-ScheduledTask -TaskName 'OpenClawGateway'";
+
+        await _logService.AppendAsync(task.VmName, "restart", $"[{DateTime.UtcNow:HH:mm:ss}] Starting restart for {task.VmName}");
 
         var (exitCode, output) = await RunCommandAsync(
             "az", $"vm run-command invoke --resource-group {rg} --name {task.VmName} --command-id RunPowerShellScript --scripts \"{script}\" -o json",
@@ -218,10 +219,12 @@ public class TaskWorkerService : BackgroundService
             vm.Status = "ready";
             await _table.UpsertAsync(vm);
             _logger.LogInformation("Restart succeeded for {VmName}", task.VmName);
+            await _logService.AppendAsync(task.VmName, "restart", $"[{DateTime.UtcNow:HH:mm:ss}] ✅ Restart succeeded", isFinal: true, exitCode: 0);
         }
         else
         {
             await SetFailedAsync(task.VmName, $"Restart failed: {output}");
+            await _logService.AppendAsync(task.VmName, "restart", $"[{DateTime.UtcNow:HH:mm:ss}] ❌ Restart failed (exit code {exitCode})\n{output}", isFinal: true, exitCode: exitCode);
         }
     }
 
