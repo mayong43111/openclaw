@@ -1,0 +1,16 @@
+<user-mapping>
+    <authorize username="admin" password="openclaw2026">
+        <connection name="vm-ymms-openclaw-16">
+            <protocol>rdp</protocol>
+            <param name="hostname">10.0.1.4</param>
+            <param name="port">3389</param>
+            <param name="username">azureuser</param>
+            <param name="password">OpenClaw@Reset2026!</param>
+            <param name="security">nla</param>
+            <param name="ignore-cert">true</param>
+            <param name="console">true</param>
+            <param name="resize-method">reconnect</param>
+            <param name="color-depth">24</param>
+        </connection>
+    </authorize>
+</user-mapping>
