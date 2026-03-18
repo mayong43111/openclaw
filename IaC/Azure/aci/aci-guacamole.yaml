@@ -26,16 +26,12 @@ properties:
           - port: 8080
             protocol: TCP
         environmentVariables:
-          - name: GUACAMOLE_HOME
-            value: /etc/guacamole
           - name: GUACD_HOSTNAME
             value: "127.0.0.1"
           - name: GUACD_PORT
             value: "4822"
-        volumeMounts:
-          - name: guac-config
-            mountPath: /etc/guacamole
-            readOnly: true
+          - name: JSON_SECRET_KEY
+            secureValue: "c74b61c7a638ccc64b0f6ab673a67134"
     - name: guacd
       properties:
         image: guacamole/guacd:1.5.5
@@ -44,8 +40,3 @@ properties:
             cpu: 0.5
             memoryInGb: 1.0
         environmentVariables: []
-  volumes:
-    - name: guac-config
-      secret:
-        guacamole.properties: Z3VhY2QtaG9zdG5hbWU6IDEyNy4wLjAuMQpndWFjZC1wb3J0OiA0ODIyCnVzZXItbWFwcGluZzogL2V0Yy9ndWFjYW1vbGUvdXNlci1tYXBwaW5nLnhtbApza2lwLWlmLXVuYXZhaWxhYmxlOiB0cnVlCg==
-        user-mapping.xml: PHVzZXItbWFwcGluZz4KICAgIDxhdXRob3JpemUgdXNlcm5hbWU9ImFkbWluIiBwYXNzd29yZD0ib3BlbmNsYXcyMDI2Ij4KICAgICAgICA8Y29ubmVjdGlvbiBuYW1lPSJ2bS15bW1zLW9wZW5jbGF3LTE2Ij4KICAgICAgICAgICAgPHByb3RvY29sPnJkcDwvcHJvdG9jb2w+CiAgICAgICAgICAgIDxwYXJhbSBuYW1lPSJob3N0bmFtZSI+MTAuMC4xLjQ8L3BhcmFtPgogICAgICAgICAgICA8cGFyYW0gbmFtZT0icG9ydCI+MzM4OTwvcGFyYW0+CiAgICAgICAgICAgIDxwYXJhbSBuYW1lPSJ1c2VybmFtZSI+YXp1cmV1c2VyPC9wYXJhbT4KICAgICAgICAgICAgPHBhcmFtIG5hbWU9InBhc3N3b3JkIj5PcGVuQ2xhd0BSZXNldDIwMjYhPC9wYXJhbT4KICAgICAgICAgICAgPHBhcmFtIG5hbWU9InNlY3VyaXR5Ij5ubGE8L3BhcmFtPgogICAgICAgICAgICA8cGFyYW0gbmFtZT0iaWdub3JlLWNlcnQiPnRydWU8L3BhcmFtPgogICAgICAgICAgICA8cGFyYW0gbmFtZT0iY29uc29sZSI+dHJ1ZTwvcGFyYW0+CiAgICAgICAgICAgIDxwYXJhbSBuYW1lPSJyZXNpemUtbWV0aG9kIj5yZWNvbm5lY3Q8L3BhcmFtPgogICAgICAgICAgICA8cGFyYW0gbmFtZT0iY29sb3ItZGVwdGgiPjI0PC9wYXJhbT4KICAgICAgICA8L2Nvbm5lY3Rpb24+CiAgICA8L2F1dGhvcml6ZT4KPC91c2VyLW1hcHBpbmc+Cg==

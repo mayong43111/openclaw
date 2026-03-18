@@ -43,7 +43,6 @@
     var vmName = '@Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(vmName))';
     var guacBase = '/guac/';
     var tokenUrl = guacBase + 'api/tokens';
-    var connectionName = vmName;
 
     var loading = document.getElementById('desktop-loading');
     var errorDiv = document.getElementById('desktop-error');
@@ -56,34 +55,33 @@
         }
     }
 
-    fetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'username=admin&password=openclaw2026'
-    })
+    // Step 1: Get encrypted JSON auth data from Console API
+    fetch('/api/desktop/token?vm=' + encodeURIComponent(vmName))
     .then(function(resp) {
-        if (!resp.ok) throw new Error('认证失败 (HTTP ' + resp.status + ')');
+        if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || 'HTTP ' + resp.status); });
         return resp.json();
     })
-    .then(function(data) {
-        var token = data.authToken;
-        return fetch(guacBase + 'api/session/data/default/connections?token=' + encodeURIComponent(token))
-            .then(function(r) { return r.json(); })
-            .then(function(connections) {
-                var connId = null;
-                for (var key in connections) {
-                    if (connections[key] && connections[key].name === connectionName) {
-                        connId = connections[key].identifier;
-                        break;
-                    }
-                }
-                if (!connId) throw new Error('未找到名为 "' + connectionName + '" 的桌面连接');
-                // Redirect to Guacamole client page directly (full page, no iframe)
-                var clientUrl = guacBase + '#/client/' +
-                    btoa(connId + '\0c\0default') +
-                    '?token=' + encodeURIComponent(token);
-                window.location.href = clientUrl;
-            });
+    .then(function(result) {
+        var encryptedData = result.data;
+        var connectionName = result.connection;
+
+        // Step 2: Send encrypted data to Guacamole to get auth token
+        return fetch(tokenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(encryptedData)
+        })
+        .then(function(resp) {
+            if (!resp.ok) throw new Error('Guacamole 认证失败 (HTTP ' + resp.status + ')');
+            return resp.json();
+        })
+        .then(function(tokenData) {
+            // Step 3: Redirect to Guacamole client (data source = "json")
+            var clientId = btoa(connectionName + '\0c\0json');
+            var clientUrl = guacBase + '#/client/' + clientId +
+                '?token=' + encodeURIComponent(tokenData.authToken);
+            window.location.href = clientUrl;
+        });
     })
     .catch(function(err) {
         showError(err.message || '连接远程桌面时发生错误');

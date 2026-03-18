@@ -19,6 +19,7 @@ builder.Services.AddSingleton<VmTableService>();
 builder.Services.AddSingleton<ImageTableService>();
 builder.Services.AddSingleton<VmLogService>();
 builder.Services.AddSingleton<VmQueueService>();
+builder.Services.AddSingleton<GuacamoleTokenService>();
 if (!builder.Environment.IsDevelopment())
     builder.Services.AddHostedService<TaskWorkerService>();
 builder.Services.AddRazorPages();
@@ -79,6 +80,19 @@ api.MapGet("/{name}/logs", async (string name, VmLogService logService) =>
 {
     var logs = await logService.GetLatestActionLogsAsync(name);
     return Results.Ok(logs.Select(l => new { l.Action, l.Text, l.Timestamp, l.IsFinal, l.ExitCode }));
+});
+
+// ─── Desktop (Guacamole JSON auth) ─────────────────────
+app.MapGet("/api/desktop/token", async (string vm, VmTableService table, GuacamoleTokenService guac) =>
+{
+    var record = await table.GetAsync(vm);
+    if (record is null)
+        return Results.NotFound(new { error = $"VM '{vm}' not found" });
+    if (string.IsNullOrEmpty(record.VmIp))
+        return Results.BadRequest(new { error = $"VM '{vm}' has no IP address" });
+
+    var encrypted = guac.CreateToken(vm, record.VmIp);
+    return Results.Ok(new { data = encrypted, connection = vm });
 });
 
 app.Run();
