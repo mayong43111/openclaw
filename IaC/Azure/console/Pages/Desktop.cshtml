@@ -118,12 +118,12 @@
         .then(function(data) {
             var token = data.authToken;
             // Step 2: List connections to find the one matching vmName
-            return fetch(guacBase + 'api/session/data/user-mapping/connections?token=' + encodeURIComponent(token))
+            return fetch(guacBase + 'api/session/data/default/connections?token=' + encodeURIComponent(token))
                 .then(function(r) { return r.json(); })
                 .then(function(connections) {
                     var connId = null;
                     for (var key in connections) {
-                        if (connections[key].name === connectionName) {
+                        if (connections[key] && connections[key].name === connectionName) {
                             connId = connections[key].identifier;
                             break;
                         }
@@ -131,7 +131,7 @@
                     if (!connId) throw new Error('未找到名为 "' + connectionName + '" 的桌面连接');
                     // Step 3: Open client in iframe
                     var clientUrl = guacBase + '#/client/' +
-                        btoa(connId + '\0c\0user-mapping') +
+                        btoa(connId + '\0c\0default') +
                         '?token=' + encodeURIComponent(token);
                     frame.src = clientUrl;
                     frame.onload = function() {
