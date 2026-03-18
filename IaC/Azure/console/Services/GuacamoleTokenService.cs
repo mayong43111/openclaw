@@ -48,7 +48,7 @@ public class GuacamoleTokenService
                         ["port"] = "3389",
                         ["username"] = _rdpUsername,
                         ["password"] = _rdpPassword,
-                        ["security"] = "nla",
+                        ["security"] = "any",
                         ["ignore-cert"] = "true",
                         ["resize-method"] = "reconnect",
                         ["color-depth"] = "24",
