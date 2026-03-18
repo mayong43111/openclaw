@@ -1,0 +1,10 @@
+{
+  "id": "azure-devops-workitems",
+  "name": "Azure DevOps Work Items",
+  "description": "Query, create, and update Azure DevOps work items using Service Principal authentication. Requires AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, ADO_ORG env vars.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

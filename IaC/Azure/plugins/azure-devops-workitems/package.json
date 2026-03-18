@@ -1,0 +1,15 @@
+{
+  "name": "@openclaw/azure-devops-workitems",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure DevOps Work Items plugin for OpenClaw (Service Principal auth)",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
