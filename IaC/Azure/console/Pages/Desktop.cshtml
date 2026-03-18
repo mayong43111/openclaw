@@ -29,17 +29,13 @@
 
 <div id="desktop-loading" class="text-center py-5">
     <div class="spinner-border text-primary" role="status"></div>
-    <p class="mt-2 text-muted">正在连接远程桌面...</p>
+    <p class="mt-2 text-muted">正在连接远程桌面，即将跳转...</p>
 </div>
 <div id="desktop-error" class="alert alert-warning d-none">
     <strong>无法连接远程桌面</strong>
     <p class="mb-0 mt-1">该 Agent 可能未配置远程桌面服务，或 Guacamole 连接不可用。</p>
+    <a asp-page="/Operations" class="btn btn-outline-secondary mt-2">← 返回运维</a>
 </div>
-<iframe id="desktop-frame"
-        class="d-none"
-        style="width:100%; height:calc(100vh - 200px); min-height:500px; border:1px solid #dee2e6; border-radius:4px;"
-        allowfullscreen>
-</iframe>
 
 @section Scripts {
 <script>
@@ -49,13 +45,11 @@
     var tokenUrl = guacBase + 'api/tokens';
     var connectionName = vmName;
 
-    var frame = document.getElementById('desktop-frame');
     var loading = document.getElementById('desktop-loading');
     var errorDiv = document.getElementById('desktop-error');
 
     function showError(msg) {
         loading.classList.add('d-none');
-        frame.classList.add('d-none');
         errorDiv.classList.remove('d-none');
         if (msg) {
             errorDiv.querySelector('p').textContent = msg;
@@ -84,19 +78,11 @@
                     }
                 }
                 if (!connId) throw new Error('未找到名为 "' + connectionName + '" 的桌面连接');
+                // Redirect to Guacamole client page directly (full page, no iframe)
                 var clientUrl = guacBase + '#/client/' +
                     btoa(connId + '\0c\0default') +
                     '?token=' + encodeURIComponent(token);
-                frame.src = clientUrl;
-                frame.onload = function() {
-                    loading.classList.add('d-none');
-                    frame.classList.remove('d-none');
-                };
-                setTimeout(function() {
-                    if (!frame.classList.contains('d-none')) return;
-                    loading.classList.add('d-none');
-                    frame.classList.remove('d-none');
-                }, 8000);
+                window.location.href = clientUrl;
             });
     })
     .catch(function(err) {
