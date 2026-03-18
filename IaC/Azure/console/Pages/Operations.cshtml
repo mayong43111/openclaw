@@ -128,6 +128,8 @@ else
                         <td>
                             @if (vm.Status == "ready")
                             {
+                                <a asp-page="/Desktop" asp-route-vm="@vm.Name" target="_blank"
+                                   class="btn btn-sm btn-outline-primary d-inline">🖥️ 桌面</a>
                                 <form method="post" asp-page-handler="Restart" asp-route-name="@vm.Name" class="d-inline">
                                     <button type="submit" class="btn btn-sm btn-outline-info"
                                             onclick="return confirm('确认重启 @vm.Name？')">重启</button>

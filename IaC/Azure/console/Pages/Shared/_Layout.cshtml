@@ -7,66 +7,161 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <style>
-        /* ===== 全局布局：上-左-右-下 ===== */
-        html, body { height: 100%; margin: 0; }
-        body { display: flex; flex-direction: column; background: #f0f2f5; }
+            /* ===== 全局布局：上-左-右-下 ===== */
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+            }
+            body {
+                display: flex;
+                flex-direction: column;
+                background: #f0f2f5;
+            }
 
-        /* ---- 顶栏 ---- */
-        .cf-header {
-            height: 56px; min-height: 56px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; color: #fff; z-index: 100;
-            box-shadow: 0 2px 8px rgba(0,0,0,.15);
-        }
-        .cf-header .cf-logo { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 700; letter-spacing: 1px; }
-        .cf-header .cf-logo img, .cf-header .cf-logo svg { height: 32px; }
-        .cf-header .cf-user { display: flex; align-items: center; gap: 12px; font-size: .875rem; }
-        .cf-header .cf-user .cf-avatar {
-            width: 34px; height: 34px; border-radius: 50%; background: #4361ee; color: #fff;
-            display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: .85rem;
-        }
+            /* ---- 顶栏 ---- */
+            .cf-header {
+                height: 56px;
+                min-height: 56px;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 24px;
+                color: #fff;
+                z-index: 100;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+            }
 
-        /* ---- 中间容器 (侧栏 + 内容) ---- */
-        .cf-body { flex: 1; display: flex; overflow: hidden; }
+            .cf-header .cf-logo {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-size: 1.25rem;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
 
-        /* ---- 左侧菜单 ---- */
-        .cf-sidebar {
-            width: 220px; min-width: 220px; background: #fff;
-            border-right: 1px solid #e8e8e8; display: flex; flex-direction: column;
-            padding: 16px 0; overflow-y: auto;
-        }
-        .cf-sidebar .cf-menu-group { padding: 0 12px; margin-bottom: 6px; }
-        .cf-sidebar .cf-menu-label {
-            font-size: .7rem; color: #999; text-transform: uppercase; letter-spacing: 1px;
-            padding: 8px 12px 4px; margin: 0; font-weight: 600;
-        }
-        .cf-sidebar .cf-menu-item {
-            display: flex; align-items: center; gap: 10px;
-            padding: 10px 16px; margin: 2px 0; border-radius: 8px;
-            color: #333; text-decoration: none; font-size: .9rem; transition: all .15s;
-        }
-        .cf-sidebar .cf-menu-item:hover { background: #f0f5ff; color: #4361ee; }
-        .cf-sidebar .cf-menu-item.active { background: #eef2ff; color: #4361ee; font-weight: 600; }
-        .cf-sidebar .cf-menu-icon { font-size: 1.15rem; width: 22px; text-align: center; }
+            .cf-header .cf-logo img,
+            .cf-header .cf-logo svg {
+                height: 32px;
+            }
+            .cf-header .cf-user {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-size: .875rem;
+            }
+            .cf-header .cf-user .cf-avatar {
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                background: #4361ee;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 600;
+                font-size: .85rem;
+            }
 
-        /* ---- 右侧内容区 ---- */
-        .cf-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+            /* ---- 中间容器 (侧栏 + 内容) ---- */
+            .cf-body {
+                flex: 1;
+                display: flex;
+                overflow: hidden;
+            }
 
-        /* ---- 底栏 ---- */
-        .cf-footer {
-            height: 40px; min-height: 40px; background: #fff; border-top: 1px solid #e8e8e8;
-            display: flex; align-items: center; justify-content: center;
-            font-size: .75rem; color: #999;
-        }
+            /* ---- 左侧菜单 ---- */
+            .cf-sidebar {
+                width: 220px;
+                min-width: 220px;
+                background: #fff;
+                border-right: 1px solid #e8e8e8;
+                display: flex;
+                flex-direction: column;
+                padding: 16px 0;
+                overflow-y: auto;
+            }
+            .cf-sidebar .cf-menu-group {
+                padding: 0 12px;
+                margin-bottom: 6px;
+            }
+            .cf-sidebar .cf-menu-label {
+                font-size: .7rem;
+                color: #999;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                padding: 8px 12px 4px;
+                margin: 0;
+                font-weight: 600;
+            }
 
-        /* 响应式：小屏侧栏收起 */
-        @@media (max-width: 768px) {
-            .cf-sidebar { width: 56px; min-width: 56px; }
-            .cf-sidebar .cf-menu-item span { display: none; }
-            .cf-sidebar .cf-menu-label { display: none; }
-            .cf-sidebar .cf-menu-item { justify-content: center; padding: 10px 0; }
-        }
+            .cf-sidebar .cf-menu-item {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 16px;
+                margin: 2px 0;
+                border-radius: 8px;
+                color: #333;
+                text-decoration: none;
+                font-size: .9rem;
+                transition: all .15s;
+            }
+            .cf-sidebar .cf-menu-item:hover {
+                background: #f0f5ff;
+                color: #4361ee;
+            }
+
+            .cf-sidebar .cf-menu-item.active {
+                background: #eef2ff;
+                color: #4361ee;
+                font-weight: 600;
+            }
+            .cf-sidebar .cf-menu-icon {
+                font-size: 1.15rem;
+                width: 22px;
+                text-align: center;
+            }
+
+            /* ---- 右侧内容区 ---- */
+            .cf-content {
+                flex: 1;
+                overflow-y: auto;
+                padding: 24px 28px;
+            }
+
+            /* ---- 底栏 ---- */
+            .cf-footer {
+                height: 40px;
+                min-height: 40px;
+                background: #fff;
+                border-top: 1px solid #e8e8e8;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: .75rem;
+                color: #999;
+            }
+
+            /* 响应式：小屏侧栏收起 */
+            @@media (max-width: 768px) {
+                .cf-sidebar {
+                    width: 56px;
+                    min-width: 56px;
+                }
+                .cf-sidebar .cf-menu-item span {
+                    display: none;
+                }
+                .cf-sidebar .cf-menu-label {
+                    display: none;
+                }
+                .cf-sidebar .cf-menu-item {
+                    justify-content: center;
+                    padding: 10px 0;
+                }
+            }
     </style>
 </head>
 
@@ -96,32 +191,25 @@
             <div class="cf-menu-group">
                 <p class="cf-menu-label">核心</p>
                 <a class="cf-menu-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Operations" || ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")"
-                   asp-page="/Operations">
+                       asp-page="/Operations">
                     <span class="cf-menu-icon">⚙️</span><span>运维与配置</span>
-                </a>
-            </div>
-            <div class="cf-menu-group">
-                <p class="cf-menu-label">工具</p>
-                <a class="cf-menu-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Desktop" ? "active" : "")"
-                   asp-page="/Desktop">
-                    <span class="cf-menu-icon">🖥️</span><span>远程桌面</span>
                 </a>
             </div>
             <div class="cf-menu-group">
                 <p class="cf-menu-label">治理</p>
                 <a class="cf-menu-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Security" ? "active" : "")"
-                   asp-page="/Security">
+                       asp-page="/Security">
                     <span class="cf-menu-icon">🔒</span><span>安全与合规</span>
                 </a>
                 <a class="cf-menu-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Skills" ? "active" : "")"
-                   asp-page="/Skills">
+                       asp-page="/Skills">
                     <span class="cf-menu-icon">🧩</span><span>技能插件</span>
                 </a>
             </div>
             <div class="cf-menu-group">
                 <p class="cf-menu-label">数据</p>
                 <a class="cf-menu-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Analytics" ? "active" : "")"
-                   asp-page="/Analytics">
+                       asp-page="/Analytics">
                     <span class="cf-menu-icon">📊</span><span>运营分析</span>
                 </a>
             </div>

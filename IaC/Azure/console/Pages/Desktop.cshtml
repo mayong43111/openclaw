@@ -1,155 +1,107 @@
 @page
 @model OpenClaw.Console.Pages.DesktopModel
 @{
-    ViewData["Title"] = "远程桌面";
+    var vmName = Model.SelectedVm ?? "";
+    ViewData["Title"] = string.IsNullOrEmpty(vmName) ? "远程桌面" : $"桌面: {vmName}";
+}
+
+@if (string.IsNullOrEmpty(vmName))
+{
+    <div class="alert alert-warning mt-3">未指定 Agent，请从<a asp-page="/Operations">运维页面</a>点击「桌面」按钮进入。</div>
+    return;
+}
+
+@{
+    var selectedRecord = Model.VmRecords.FirstOrDefault(v => v.Name == vmName);
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>🖥️ 远程桌面</h2>
-</div>
-
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>选择 Agent</strong>
-                @if (!string.IsNullOrEmpty(Model.SelectedVm))
-                {
-                    <a asp-page="/Desktop" class="btn btn-sm btn-outline-secondary">← 返回列表</a>
-                }
-            </div>
-            <div class="card-body">
-                @if (string.IsNullOrEmpty(Model.SelectedVm))
-                {
-                    @if (Model.VmRecords.Count == 0)
-                    {
-                        <div class="alert alert-info mb-0">暂无 Agent。</div>
-                    }
-                    else
-                    {
-                        <div class="row g-3">
-                            @foreach (var vm in Model.VmRecords)
-                            {
-                                <div class="col-md-3 col-sm-6">
-                                    <a asp-page="/Desktop" asp-route-vm="@vm.Name"
-                                       class="card text-decoration-none h-100 @(vm.Status == "ready" ? "border-success" : "border-secondary")"
-                                       style="transition: all .15s;">
-                                        <div class="card-body text-center">
-                                            <div style="font-size:2.5rem;">🖥️</div>
-                                            <h6 class="mt-2 mb-1">@vm.Name</h6>
-                                            <span class="badge @vm.StatusBadgeClass">@vm.Status</span>
-                                            @if (!string.IsNullOrEmpty(vm.VmIp))
-                                            {
-                                                <div class="mt-1"><small class="text-muted">@vm.VmIp</small></div>
-                                            }
-                                        </div>
-                                    </a>
-                                </div>
-                            }
-                        </div>
-                    }
-                }
-                else
-                {
-                    @* Selected VM — show desktop iframe *@
-                    var selectedRecord = Model.VmRecords.FirstOrDefault(v => v.Name == Model.SelectedVm);
-                    <div id="desktop-container">
-                        <div class="d-flex align-items-center mb-2">
-                            <h5 class="mb-0 me-3">@Model.SelectedVm</h5>
-                            @if (selectedRecord != null)
-                            {
-                                <span class="badge @selectedRecord.StatusBadgeClass me-2">@selectedRecord.Status</span>
-                                <small class="text-muted">@selectedRecord.VmIp</small>
-                            }
-                        </div>
-                        <div id="desktop-loading" class="text-center py-5">
-                            <div class="spinner-border text-primary" role="status"></div>
-                            <p class="mt-2 text-muted">正在连接远程桌面...</p>
-                        </div>
-                        <div id="desktop-error" class="alert alert-warning d-none">
-                            <strong>无法连接远程桌面</strong>
-                            <p class="mb-0 mt-1">该 Agent 可能未配置远程桌面服务，或 Guacamole 连接不可用。</p>
-                        </div>
-                        <iframe id="desktop-frame"
-                                class="d-none"
-                                style="width:100%; height:calc(100vh - 280px); min-height:500px; border:1px solid #dee2e6; border-radius:4px;"
-                                allowfullscreen>
-                        </iframe>
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-</div>
-
-@if (!string.IsNullOrEmpty(Model.SelectedVm))
-{
-    @section Scripts {
-    <script>
-    (function() {
-        var vmName = '@Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Model.SelectedVm))';
-        var guacBase = '/guac/';
-        var tokenUrl = guacBase + 'api/tokens';
-        var connectionName = vmName;
-
-        var frame = document.getElementById('desktop-frame');
-        var loading = document.getElementById('desktop-loading');
-        var errorDiv = document.getElementById('desktop-error');
-
-        function showError(msg) {
-            loading.classList.add('d-none');
-            frame.classList.add('d-none');
-            errorDiv.classList.remove('d-none');
-            if (msg) {
-                errorDiv.querySelector('p').textContent = msg;
-            }
+    <div class="d-flex align-items-center">
+        <h4 class="mb-0 me-3">🖥️ @vmName</h4>
+        @if (selectedRecord != null)
+        {
+            <span class="badge @selectedRecord.StatusBadgeClass me-2">@selectedRecord.Status</span>
+            <small class="text-muted">@selectedRecord.VmIp</small>
         }
+    </div>
+    <a asp-page="/Operations" class="btn btn-sm btn-outline-secondary">← 返回运维</a>
+</div>
 
-        // Step 1: Get auth token from Guacamole
-        fetch(tokenUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'username=admin&password=openclaw2026'
-        })
-        .then(function(resp) {
-            if (!resp.ok) throw new Error('认证失败 (HTTP ' + resp.status + ')');
-            return resp.json();
-        })
-        .then(function(data) {
-            var token = data.authToken;
-            // Step 2: List connections to find the one matching vmName
-            return fetch(guacBase + 'api/session/data/default/connections?token=' + encodeURIComponent(token))
-                .then(function(r) { return r.json(); })
-                .then(function(connections) {
-                    var connId = null;
-                    for (var key in connections) {
-                        if (connections[key] && connections[key].name === connectionName) {
-                            connId = connections[key].identifier;
-                            break;
-                        }
-                    }
-                    if (!connId) throw new Error('未找到名为 "' + connectionName + '" 的桌面连接');
-                    // Step 3: Open client in iframe
-                    var clientUrl = guacBase + '#/client/' +
-                        btoa(connId + '\0c\0default') +
-                        '?token=' + encodeURIComponent(token);
-                    frame.src = clientUrl;
-                    frame.onload = function() {
-                        loading.classList.add('d-none');
-                        frame.classList.remove('d-none');
-                    };
-                    // Fallback timeout
-                    setTimeout(function() {
-                        if (!frame.classList.contains('d-none')) return;
-                        loading.classList.add('d-none');
-                        frame.classList.remove('d-none');
-                    }, 8000);
-                });
-        })
-        .catch(function(err) {
-            showError(err.message || '连接远程桌面时发生错误');
-        });
-    })();
-    </script>
+<div id="desktop-loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-2 text-muted">正在连接远程桌面...</p>
+</div>
+<div id="desktop-error" class="alert alert-warning d-none">
+    <strong>无法连接远程桌面</strong>
+    <p class="mb-0 mt-1">该 Agent 可能未配置远程桌面服务，或 Guacamole 连接不可用。</p>
+</div>
+<iframe id="desktop-frame"
+        class="d-none"
+        style="width:100%; height:calc(100vh - 200px); min-height:500px; border:1px solid #dee2e6; border-radius:4px;"
+        allowfullscreen>
+</iframe>
+
+@section Scripts {
+<script>
+(function() {
+    var vmName = '@Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(vmName))';
+    var guacBase = '/guac/';
+    var tokenUrl = guacBase + 'api/tokens';
+    var connectionName = vmName;
+
+    var frame = document.getElementById('desktop-frame');
+    var loading = document.getElementById('desktop-loading');
+    var errorDiv = document.getElementById('desktop-error');
+
+    function showError(msg) {
+        loading.classList.add('d-none');
+        frame.classList.add('d-none');
+        errorDiv.classList.remove('d-none');
+        if (msg) {
+            errorDiv.querySelector('p').textContent = msg;
+        }
     }
+
+    fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'username=admin&password=openclaw2026'
+    })
+    .then(function(resp) {
+        if (!resp.ok) throw new Error('认证失败 (HTTP ' + resp.status + ')');
+        return resp.json();
+    })
+    .then(function(data) {
+        var token = data.authToken;
+        return fetch(guacBase + 'api/session/data/default/connections?token=' + encodeURIComponent(token))
+            .then(function(r) { return r.json(); })
+            .then(function(connections) {
+                var connId = null;
+                for (var key in connections) {
+                    if (connections[key] && connections[key].name === connectionName) {
+                        connId = connections[key].identifier;
+                        break;
+                    }
+                }
+                if (!connId) throw new Error('未找到名为 "' + connectionName + '" 的桌面连接');
+                var clientUrl = guacBase + '#/client/' +
+                    btoa(connId + '\0c\0default') +
+                    '?token=' + encodeURIComponent(token);
+                frame.src = clientUrl;
+                frame.onload = function() {
+                    loading.classList.add('d-none');
+                    frame.classList.remove('d-none');
+                };
+                setTimeout(function() {
+                    if (!frame.classList.contains('d-none')) return;
+                    loading.classList.add('d-none');
+                    frame.classList.remove('d-none');
+                }, 8000);
+            });
+    })
+    .catch(function(err) {
+        showError(err.message || '连接远程桌面时发生错误');
+    });
+})();
+</script>
 }
