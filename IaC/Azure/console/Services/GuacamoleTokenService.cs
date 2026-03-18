@@ -63,31 +63,29 @@ public class GuacamoleTokenService
 
     private string Encrypt(string plaintext)
     {
-        var data = Encoding.UTF8.GetBytes(plaintext);
+        var json = Encoding.UTF8.GetBytes(plaintext);
 
+        // 1. HMAC-SHA256 signature of the raw JSON
+        using var hmac = new HMACSHA256(_key);
+        var signature = hmac.ComputeHash(json);
+
+        // 2. Plaintext to encrypt = signature (32 bytes) + JSON
+        var combined = new byte[signature.Length + json.Length];
+        Buffer.BlockCopy(signature, 0, combined, 0, signature.Length);
+        Buffer.BlockCopy(json, 0, combined, signature.Length, json.Length);
+
+        // 3. AES-128-CBC with NULL IV (all zeros) — Guacamole uses the
+        //    HMAC prefix as an effective IV, so the actual IV is zeroed.
         using var aes = Aes.Create();
         aes.Key = _key;
         aes.Mode = CipherMode.CBC;
         aes.Padding = PaddingMode.PKCS7;
-        aes.GenerateIV();
+        aes.IV = new byte[16]; // NULL IV
 
         using var encryptor = aes.CreateEncryptor();
-        var ciphertext = encryptor.TransformFinalBlock(data, 0, data.Length);
+        var ciphertext = encryptor.TransformFinalBlock(combined, 0, combined.Length);
 
-        // payload = IV (16 bytes) + ciphertext
-        var payload = new byte[aes.IV.Length + ciphertext.Length];
-        Buffer.BlockCopy(aes.IV, 0, payload, 0, aes.IV.Length);
-        Buffer.BlockCopy(ciphertext, 0, payload, aes.IV.Length, ciphertext.Length);
-
-        // HMAC-SHA256 signature of the payload, using the same key
-        using var hmac = new HMACSHA256(_key);
-        var signature = hmac.ComputeHash(payload);
-
-        // Final result: signature (32 bytes) + payload (IV + ciphertext)
-        var result = new byte[signature.Length + payload.Length];
-        Buffer.BlockCopy(signature, 0, result, 0, signature.Length);
-        Buffer.BlockCopy(payload, 0, result, signature.Length, payload.Length);
-
-        return Convert.ToBase64String(result);
+        // 4. Base64 encode the ciphertext only (no IV in output)
+        return Convert.ToBase64String(ciphertext);
     }
 }
