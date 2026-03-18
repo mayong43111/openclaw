@@ -6,7 +6,7 @@ namespace OpenClaw.Console.Services;
 
 /// <summary>
 /// Generates encrypted JSON auth tokens for Apache Guacamole.
-/// Uses AES-128-CBC with PKCS7 padding; IV prepended to ciphertext, then base64-encoded.
+/// Format: HMAC-SHA256(IV + ciphertext) ‖ IV ‖ AES-128-CBC(plaintext), base64-encoded.
 /// See: https://guacamole.apache.org/doc/gug/json-auth.html
 /// </summary>
 public class GuacamoleTokenService
@@ -72,12 +72,21 @@ public class GuacamoleTokenService
         aes.GenerateIV();
 
         using var encryptor = aes.CreateEncryptor();
-        var encrypted = encryptor.TransformFinalBlock(data, 0, data.Length);
+        var ciphertext = encryptor.TransformFinalBlock(data, 0, data.Length);
 
-        // Guacamole expects: IV (16 bytes) + ciphertext, base64-encoded
-        var result = new byte[aes.IV.Length + encrypted.Length];
-        Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
-        Buffer.BlockCopy(encrypted, 0, result, aes.IV.Length, encrypted.Length);
+        // payload = IV (16 bytes) + ciphertext
+        var payload = new byte[aes.IV.Length + ciphertext.Length];
+        Buffer.BlockCopy(aes.IV, 0, payload, 0, aes.IV.Length);
+        Buffer.BlockCopy(ciphertext, 0, payload, aes.IV.Length, ciphertext.Length);
+
+        // HMAC-SHA256 signature of the payload, using the same key
+        using var hmac = new HMACSHA256(_key);
+        var signature = hmac.ComputeHash(payload);
+
+        // Final result: signature (32 bytes) + payload (IV + ciphertext)
+        var result = new byte[signature.Length + payload.Length];
+        Buffer.BlockCopy(signature, 0, result, 0, signature.Length);
+        Buffer.BlockCopy(payload, 0, result, signature.Length, payload.Length);
 
         return Convert.ToBase64String(result);
     }
