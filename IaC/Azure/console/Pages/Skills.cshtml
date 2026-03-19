@@ -252,8 +252,24 @@
 
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header"><strong>📊 技能使用统计</strong></div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>📊 技能使用统计</strong>
+                @if (Model.ActiveVmCount > 0)
+                {
+                    <span class="badge bg-info">来自 @Model.ActiveVmCount 台 VM</span>
+                }
+            </div>
             <div class="card-body p-0">
+                @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                {
+                    <div class="alert alert-warning m-3 mb-0">@Model.ErrorMessage</div>
+                }
+                else if (Model.ToolStats.Count == 0)
+                {
+                    <div class="text-muted text-center py-3">暂无使用数据（最近 24 小时）</div>
+                }
+                else
+                {
                 <table class="table table-sm mb-0">
                     <thead class="table-light">
                         <tr>
@@ -264,38 +280,18 @@
                         </tr>
                     </thead>
                     <tbody>
+                        @foreach (var tool in Model.ToolStats)
+                        {
                         <tr>
-                            <td><code>web_search</code></td>
-                            <td>1,247</td>
-                            <td>320ms</td>
-                            <td><span class="text-success">0.2%</span></td>
+                            <td><code>@tool.Name</code></td>
+                            <td>@tool.Calls.ToString("N0")</td>
+                            <td>@tool.FormattedLatency</td>
+                            <td><span class="@tool.ErrorRateCssClass">@tool.ErrorRate.ToString("F1")%</span></td>
                         </tr>
-                        <tr>
-                            <td><code>code_interpreter</code></td>
-                            <td>856</td>
-                            <td>1.2s</td>
-                            <td><span class="text-success">1.1%</span></td>
-                        </tr>
-                        <tr>
-                            <td><code>sql_query</code></td>
-                            <td>432</td>
-                            <td>180ms</td>
-                            <td><span class="text-success">0.5%</span></td>
-                        </tr>
-                        <tr>
-                            <td><code>doc_qa</code></td>
-                            <td>298</td>
-                            <td>2.1s</td>
-                            <td><span class="text-warning">3.2%</span></td>
-                        </tr>
-                        <tr>
-                            <td><code>image_gen</code></td>
-                            <td>156</td>
-                            <td>4.5s</td>
-                            <td><span class="text-success">0.8%</span></td>
-                        </tr>
+                        }
                     </tbody>
                 </table>
+                }
             </div>
         </div>
     </div>

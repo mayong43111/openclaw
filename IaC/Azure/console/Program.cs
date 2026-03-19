@@ -20,6 +20,7 @@ builder.Services.AddSingleton<ImageTableService>();
 builder.Services.AddSingleton<VmLogService>();
 builder.Services.AddSingleton<VmQueueService>();
 builder.Services.AddSingleton<GuacamoleTokenService>();
+builder.Services.AddSingleton<GatewayUsageService>();
 if (!builder.Environment.IsDevelopment())
     builder.Services.AddHostedService<TaskWorkerService>();
 builder.Services.AddRazorPages();
