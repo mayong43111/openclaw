@@ -14,6 +14,12 @@ public class SkillsModel : PageModel
 
     public List<ToolUsageStat> ToolStats { get; set; } = new();
     public int ActiveVmCount { get; set; }
+    public int ReadyVmCount { get; set; }
+    public int TotalVmCount { get; set; }
+    public int TotalMessages { get; set; }
+    public int TotalToolCalls { get; set; }
+    public double AvgLatencyMs { get; set; }
+    public double GlobalErrorRate { get; set; }
     public string? ErrorMessage { get; set; }
 
     public async Task OnGetAsync()
@@ -23,6 +29,12 @@ public class SkillsModel : PageModel
             var result = await _usage.GetAggregatedUsageAsync(days: 1);
             ToolStats = result.GetToolStats();
             ActiveVmCount = result.VmCount;
+            ReadyVmCount = result.ReadyVmCount;
+            TotalVmCount = result.TotalVmCount;
+            TotalMessages = result.TotalMessages;
+            TotalToolCalls = result.ToolCallsTotal;
+            AvgLatencyMs = result.AverageLatencyMs;
+            GlobalErrorRate = result.GlobalErrorRate;
         }
         catch (Exception ex)
         {

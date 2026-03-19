@@ -32,25 +32,30 @@ public class GatewayUsageService
     /// </summary>
     public async Task<AggregatedUsage> GetAggregatedUsageAsync(int days = 1, CancellationToken ct = default)
     {
+        var globalToken = _config["Gateway:AuthToken"];
         var vms = await _vmTable.GetAllAsync();
         var readyVms = vms.Where(v => v.Status == "ready" && !string.IsNullOrEmpty(v.VmIp)).ToList();
 
         var startDate = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var endDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-        var tasks = readyVms.Select(vm => QueryVmUsageAsync(vm, startDate, endDate, ct));
+        var tasks = readyVms.Select(vm => QueryVmUsageAsync(vm, globalToken, startDate, endDate, ct));
         var results = await Task.WhenAll(tasks);
 
-        return MergeUsageResults(results.Where(r => r is not null).Cast<VmUsageResult>().ToList());
+        var merged = MergeUsageResults(results.Where(r => r is not null).Cast<VmUsageResult>().ToList());
+        merged.ReadyVmCount = readyVms.Count;
+        merged.TotalVmCount = vms.Count;
+        return merged;
     }
 
-    private async Task<VmUsageResult?> QueryVmUsageAsync(VmRecord vm, string startDate, string endDate, CancellationToken ct)
+    private async Task<VmUsageResult?> QueryVmUsageAsync(VmRecord vm, string? globalToken, string startDate, string endDate, CancellationToken ct)
     {
         var port = _config.GetValue("Gateway:Port", 18789);
-        var token = _config["Gateway:AuthToken"];
+        // Prefer per-VM token from Table Storage, fall back to global config.
+        var token = !string.IsNullOrEmpty(vm.Token) ? vm.Token : globalToken;
         if (string.IsNullOrEmpty(token))
         {
-            _logger.LogWarning("Gateway:AuthToken not configured, skipping VM {VmName}", vm.Name);
+            _logger.LogWarning("No auth token for VM {VmName} (neither per-VM nor global), skipping", vm.Name);
             return null;
         }
 
@@ -241,7 +246,12 @@ public class AggregatedUsage
     public int TotalMessages { get; set; }
     public int ToolCallsTotal { get; set; }
     public int Errors { get; set; }
+    /// <summary>VMs that returned data successfully.</summary>
     public int VmCount { get; set; }
+    /// <summary>VMs with status=ready in Table Storage.</summary>
+    public int ReadyVmCount { get; set; }
+    /// <summary>Total VMs in Table Storage (all statuses).</summary>
+    public int TotalVmCount { get; set; }
     public List<LatencySample> LatencySamples { get; set; } = new();
 
     /// <summary>Weighted average latency across all VMs.</summary>
@@ -255,21 +265,25 @@ public class AggregatedUsage
         }
     }
 
-    /// <summary>Per-tool usage stats for display.</summary>
+    /// <summary>Global error rate percentage.</summary>
+    public double GlobalErrorRate
+    {
+        get
+        {
+            var totalCalls = ToolCallsTotal > 0 ? ToolCallsTotal : ToolCalls.Values.Sum();
+            return totalCalls > 0 ? (double)Errors / totalCalls * 100 : 0;
+        }
+    }
+
+    /// <summary>Per-tool usage stats for display (calls only — latency/errors are global).</summary>
     public List<ToolUsageStat> GetToolStats()
     {
-        var totalErrors = Errors;
-        var totalCalls = ToolCallsTotal > 0 ? ToolCallsTotal : ToolCalls.Values.Sum();
-
         return ToolCalls
             .OrderByDescending(kv => kv.Value)
             .Select(kv => new ToolUsageStat
             {
                 Name = kv.Key,
                 Calls = kv.Value,
-                AvgLatencyMs = AverageLatencyMs,
-                // Error rate is global (Gateway doesn't break down errors per tool)
-                ErrorRate = totalCalls > 0 ? (double)totalErrors / totalCalls * 100 : 0,
             })
             .ToList();
     }
@@ -285,20 +299,4 @@ public class ToolUsageStat
 {
     public string Name { get; set; } = "";
     public int Calls { get; set; }
-    public double AvgLatencyMs { get; set; }
-    public double ErrorRate { get; set; }
-
-    public string FormattedLatency => AvgLatencyMs switch
-    {
-        >= 1000 => $"{AvgLatencyMs / 1000:F1}s",
-        > 0 => $"{AvgLatencyMs:F0}ms",
-        _ => "—",
-    };
-
-    public string ErrorRateCssClass => ErrorRate switch
-    {
-        > 5 => "text-danger",
-        > 2 => "text-warning",
-        _ => "text-success",
-    };
 }

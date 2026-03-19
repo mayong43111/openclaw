@@ -254,10 +254,17 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>📊 技能使用统计</strong>
-                @if (Model.ActiveVmCount > 0)
-                {
-                    <span class="badge bg-info">来自 @Model.ActiveVmCount 台 VM</span>
-                }
+                <div>
+                    @if (Model.ActiveVmCount > 0)
+                    {
+                        <span class="badge bg-success">@Model.ActiveVmCount 台响应</span>
+                    }
+                    @if (Model.ReadyVmCount > Model.ActiveVmCount)
+                    {
+                        <span class="badge bg-warning text-dark">@(Model.ReadyVmCount - Model.ActiveVmCount) 台未响应</span>
+                    }
+                    <span class="badge bg-secondary">共 @Model.TotalVmCount 台 / @Model.ReadyVmCount 台就绪</span>
+                </div>
             </div>
             <div class="card-body p-0">
                 @if (!string.IsNullOrEmpty(Model.ErrorMessage))
@@ -270,13 +277,31 @@
                 }
                 else
                 {
+                <!-- Global summary -->
+                <div class="d-flex justify-content-around text-center py-2 border-bottom bg-light">
+                    <div>
+                        <div class="fw-bold">@Model.TotalMessages.ToString("N0")</div>
+                        <small class="text-muted">消息总数</small>
+                    </div>
+                    <div>
+                        <div class="fw-bold">@Model.TotalToolCalls.ToString("N0")</div>
+                        <small class="text-muted">工具调用</small>
+                    </div>
+                    <div>
+                        <div class="fw-bold">@(Model.AvgLatencyMs >= 1000 ? $"{Model.AvgLatencyMs / 1000:F1}s" : Model.AvgLatencyMs > 0 ? $"{Model.AvgLatencyMs:F0}ms" : "—")</div>
+                        <small class="text-muted">平均延迟</small>
+                    </div>
+                    <div>
+                        <div class="fw-bold @(Model.GlobalErrorRate > 5 ? "text-danger" : Model.GlobalErrorRate > 2 ? "text-warning" : "text-success")">@Model.GlobalErrorRate.ToString("F1")%</div>
+                        <small class="text-muted">错误率</small>
+                    </div>
+                </div>
+                <!-- Per-tool breakdown -->
                 <table class="table table-sm mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>技能</th>
-                            <th>Calls (24h)</th>
-                            <th>平均延迟</th>
-                            <th>错误率</th>
+                            <th class="text-end">调用次数 (24h)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -284,9 +309,7 @@
                         {
                         <tr>
                             <td><code>@tool.Name</code></td>
-                            <td>@tool.Calls.ToString("N0")</td>
-                            <td>@tool.FormattedLatency</td>
-                            <td><span class="@tool.ErrorRateCssClass">@tool.ErrorRate.ToString("F1")%</span></td>
+                            <td class="text-end">@tool.Calls.ToString("N0")</td>
                         </tr>
                         }
                     </tbody>
