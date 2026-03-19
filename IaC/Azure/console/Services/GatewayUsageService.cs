@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using OpenClaw.Console.Models;
+using System.Globalization;
 
 namespace OpenClaw.Console.Services;
 
@@ -34,13 +35,16 @@ public class GatewayUsageService
         var vms = await _vmTable.GetAllAsync();
         var readyVms = vms.Where(v => v.Status == "ready" && !string.IsNullOrEmpty(v.VmIp)).ToList();
 
-        var tasks = readyVms.Select(vm => QueryVmUsageAsync(vm, days, ct));
+        var startDate = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var endDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        var tasks = readyVms.Select(vm => QueryVmUsageAsync(vm, startDate, endDate, ct));
         var results = await Task.WhenAll(tasks);
 
         return MergeUsageResults(results.Where(r => r is not null).Cast<VmUsageResult>().ToList());
     }
 
-    private async Task<VmUsageResult?> QueryVmUsageAsync(VmRecord vm, int days, CancellationToken ct)
+    private async Task<VmUsageResult?> QueryVmUsageAsync(VmRecord vm, string startDate, string endDate, CancellationToken ct)
     {
         var port = _config.GetValue("Gateway:Port", 18789);
         var token = _config["Gateway:AuthToken"];
@@ -53,6 +57,8 @@ public class GatewayUsageService
         var uri = new Uri($"ws://{vm.VmIp}:{port}");
         using var ws = new ClientWebSocket();
         ws.Options.SetRequestHeader("User-Agent", "openclaw-console/1.0");
+        // Control UI origin check requires Origin header matching the gateway host.
+        ws.Options.SetRequestHeader("Origin", $"http://{vm.VmIp}:{port}");
 
         try
         {
@@ -73,7 +79,7 @@ public class GatewayUsageService
                 {
                     minProtocol = 3,
                     maxProtocol = 3,
-                    client = new { id = "console", version = "1.0.0", platform = "linux", mode = "operator" },
+                    client = new { id = "openclaw-control-ui", version = "1.0.0", platform = "linux", mode = "ui" },
                     role = "operator",
                     scopes = new[] { "operator.read" },
                     caps = Array.Empty<string>(),
@@ -98,7 +104,7 @@ public class GatewayUsageService
                 type = "req",
                 id = "usage-1",
                 method = "sessions.usage",
-                @params = new { days, limit = 200 }
+                @params = new { startDate, endDate, limit = 200 }
             };
             await SendJsonAsync(ws, usageReq, ct);
 
