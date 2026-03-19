@@ -2,22 +2,30 @@
 @model OpenClaw.Console.Pages.AnalyticsModel
 @{
     ViewData["Title"] = "运营分析展示";
+    var maxMessages = Model.DailyStats.Count > 0 ? Model.DailyStats.Max(d => d.Messages) : 1;
+    var totalModelTokens = Model.ModelStats.Sum(m => m.Tokens);
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>📊 运营分析展示</h2>
     <div class="d-flex gap-2 align-items-center">
-        <select class="form-select form-select-sm" style="width:150px;" disabled>
-            <option selected>近 7 天</option>
-            <option>近 30 天</option>
-            <option>近 90 天</option>
-            <option>自定义范围</option>
-        </select>
-        <button class="btn btn-outline-primary btn-sm" disabled>
-            <span class="me-1">📤</span> 导出报告
-        </button>
+        <span class="text-muted">统计周期：近 7 天</span>
+        @if (Model.ActiveVmCount > 0)
+        {
+            <span class="badge bg-success">@Model.ActiveVmCount 台响应</span>
+        }
+        @if (Model.ReadyVmCount > Model.ActiveVmCount)
+        {
+            <span class="badge bg-warning text-dark">@(Model.ReadyVmCount - Model.ActiveVmCount) 台未响应</span>
+        }
+        <span class="badge bg-secondary">共 @Model.TotalVmCount 台</span>
     </div>
 </div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-warning">@Model.ErrorMessage</div>
+}
 
 <!-- KPI Overview -->
 <div class="row mb-4">
@@ -26,12 +34,12 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <p class="card-text mb-1" style="opacity:0.8">自动化操作</p>
-                        <h3 class="card-title mb-0">12,847</h3>
+                        <p class="card-text mb-1" style="opacity:0.8">消息总数</p>
+                        <h3 class="card-title mb-0">@Model.TotalMessages.ToString("N0")</h3>
                     </div>
-                    <div style="font-size:2.5rem;opacity:0.3">🤖</div>
+                    <div style="font-size:2.5rem;opacity:0.3">💬</div>
                 </div>
-                <small style="opacity:0.8">↑ 23% vs last week</small>
+                <small style="opacity:0.8">工具调用 @Model.TotalToolCalls.ToString("N0") 次</small>
             </div>
         </div>
     </div>
@@ -40,12 +48,12 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <p class="card-text mb-1" style="opacity:0.8">节省工时</p>
-                        <h3 class="card-title mb-0">486h</h3>
+                        <p class="card-text mb-1" style="opacity:0.8">会话数</p>
+                        <h3 class="card-title mb-0">@Model.SessionCount.ToString("N0")</h3>
                     </div>
-                    <div style="font-size:2.5rem;opacity:0.3">⏱️</div>
+                    <div style="font-size:2.5rem;opacity:0.3">🗂️</div>
                 </div>
-                <small style="opacity:0.8">↑ 15% vs last week</small>
+                <small style="opacity:0.8">来自 @Model.ActiveVmCount 台 VM</small>
             </div>
         </div>
     </div>
@@ -54,12 +62,12 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <p class="card-text mb-1" style="opacity:0.8">效率提升</p>
-                        <h3 class="card-title mb-0">34%</h3>
+                        <p class="card-text mb-1" style="opacity:0.8">Token 消耗</p>
+                        <h3 class="card-title mb-0">@FormatTokens(Model.TotalTokens)</h3>
                     </div>
-                    <div style="font-size:2.5rem;opacity:0.3">📈</div>
+                    <div style="font-size:2.5rem;opacity:0.3">🔤</div>
                 </div>
-                <small style="opacity:0.8">↑ 5pp vs last month</small>
+                <small style="opacity:0.8">平均延迟 @FormatLatency(Model.AvgLatencyMs)</small>
             </div>
         </div>
     </div>
@@ -68,237 +76,189 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <p class="card-text mb-1" style="opacity:0.8">预估 ROI</p>
-                        <h3 class="card-title mb-0">¥182K</h3>
+                        <p class="card-text mb-1" style="opacity:0.8">API 费用</p>
+                        <h3 class="card-title mb-0">$@Model.TotalCostUsd.ToString("F2")</h3>
                     </div>
                     <div style="font-size:2.5rem;opacity:0.3">💰</div>
                 </div>
-                <small>Monthly cost savings</small>
+                <small>错误率 <span class="@(Model.GlobalErrorRate > 5 ? "text-danger" : "")">@Model.GlobalErrorRate.ToString("F1")%</span></small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Usage Trends (Placeholder Chart Area) -->
+<!-- Usage Trends + Model Distribution -->
 <div class="row mb-4">
     <div class="col-md-8">
         <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>📈 Agent Activity Trend (7 days)</strong>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary active" disabled>Daily</button>
-                    <button class="btn btn-outline-secondary" disabled>Weekly</button>
-                    <button class="btn btn-outline-secondary" disabled>Monthly</button>
-                </div>
+            <div class="card-header">
+                <strong>📈 每日活动趋势 (7 天)</strong>
             </div>
             <div class="card-body">
-                <!-- Simulated chart with CSS bars -->
-                <div class="d-flex align-items-end justify-content-around" style="height:200px; margin-bottom:0.5rem;">
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:120px;opacity:0.7"></div>
+                @if (Model.DailyStats.Count == 0)
+                {
+                    <div class="text-muted text-center py-5">暂无每日数据</div>
+                }
+                else
+                {
+                    <!-- CSS bar chart -->
+                    <div class="d-flex align-items-end justify-content-around" style="height:200px; margin-bottom:0.5rem;">
+                        @foreach (var day in Model.DailyStats)
+                        {
+                            var barHeight = maxMessages > 0 ? (int)(day.Messages * 190.0 / maxMessages) + 10 : 10;
+                            var opacity = maxMessages > 0 ? 0.4 + day.Messages * 0.6 / maxMessages : 0.5;
+                            <div class="text-center" style="flex:1; max-width:60px;">
+                                <div class="bg-primary rounded-top mx-auto" style="width:36px;height:@(barHeight)px;opacity:@opacity.ToString("F2")"></div>
+                            </div>
+                        }
                     </div>
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:150px;opacity:0.8"></div>
+                    <div class="d-flex justify-content-around">
+                        @foreach (var day in Model.DailyStats)
+                        {
+                            <div class="text-center" style="flex:1; max-width:60px;">
+                                <small class="text-muted d-block">@day.Label</small>
+                                <small>@day.Messages.ToString("N0")</small>
+                            </div>
+                        }
                     </div>
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:170px;opacity:0.85"></div>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:140px;opacity:0.75"></div>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:190px;opacity:0.9"></div>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:80px;opacity:0.5"></div>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <div class="bg-primary rounded-top mx-auto" style="width:40px;height:195px;opacity:1.0"></div>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-around">
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周一</small>
-                        <small>1,543</small>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周二</small>
-                        <small>1,892</small>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周三</small>
-                        <small>2,134</small>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周四</small>
-                        <small>1,756</small>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周五</small>
-                        <small>2,387</small>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周六</small>
-                        <small>987</small>
-                    </div>
-                    <div class="text-center" style="width:40px;">
-                        <small class="text-muted d-block">周日</small>
-                        <small>2,148</small>
-                    </div>
-                </div>
+                    <!-- Daily detail table -->
+                    <table class="table table-sm mt-3 mb-0" style="font-size:0.85rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>日期</th>
+                                <th class="text-end">消息</th>
+                                <th class="text-end">工具调用</th>
+                                <th class="text-end">Token</th>
+                                <th class="text-end">费用</th>
+                                <th class="text-end">错误</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var day in Model.DailyStats)
+                            {
+                                <tr>
+                                    <td>@day.Date</td>
+                                    <td class="text-end">@day.Messages.ToString("N0")</td>
+                                    <td class="text-end">@day.ToolCalls.ToString("N0")</td>
+                                    <td class="text-end">@FormatTokens(day.Tokens)</td>
+                                    <td class="text-end">$@day.Cost.ToString("F3")</td>
+                                    <td class="text-end @(day.Errors > 0 ? "text-danger" : "")">@day.Errors</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card h-100">
-            <div class="card-header"><strong>🏷️ 任务类别分布</strong></div>
+            <div class="card-header"><strong>🏷️ 模型使用分布</strong></div>
             <div class="card-body">
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>Code Generation</span>
-                        <strong>35%</strong>
-                    </div>
-                    <div class="progress" style="height:12px;">
-                        <div class="progress-bar bg-primary" style="width:35%;"></div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>文档问答</span>
-                        <strong>25%</strong>
-                    </div>
-                    <div class="progress" style="height:12px;">
-                        <div class="progress-bar bg-success" style="width:25%;"></div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>数据分析</span>
-                        <strong>20%</strong>
-                    </div>
-                    <div class="progress" style="height:12px;">
-                        <div class="progress-bar bg-info" style="width:20%;"></div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>Web Research</span>
-                        <strong>12%</strong>
-                    </div>
-                    <div class="progress" style="height:12px;">
-                        <div class="progress-bar bg-warning" style="width:12%;"></div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>Other</span>
-                        <strong>8%</strong>
-                    </div>
-                    <div class="progress" style="height:12px;">
-                        <div class="progress-bar bg-secondary" style="width:8%;"></div>
-                    </div>
-                </div>
+                @if (Model.ModelStats.Count == 0)
+                {
+                    <div class="text-muted text-center py-3">暂无模型数据</div>
+                }
+                else
+                {
+                    var progressColors = new[] { "bg-primary", "bg-success", "bg-info", "bg-warning", "bg-danger", "bg-secondary" };
+                    var idx = 0;
+                    @foreach (var m in Model.ModelStats.Take(6))
+                    {
+                        var pct = totalModelTokens > 0 ? (double)m.Tokens / totalModelTokens * 100 : 0;
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span style="font-size:0.9rem;">@m.DisplayName</span>
+                                <strong>@pct.ToString("F0")%</strong>
+                            </div>
+                            <div class="progress" style="height:12px;">
+                                <div class="progress-bar @progressColors[idx % progressColors.Length]" style="width:@pct.ToString("F1")%;"></div>
+                            </div>
+                            <small class="text-muted">@m.ApiCalls 次调用 · $@m.Cost.ToString("F3")</small>
+                        </div>
+                        idx++;
+                    }
+                }
             </div>
         </div>
     </div>
 </div>
 
-<!-- Per-Agent Performance -->
+<!-- Per-VM Performance -->
 <div class="card mb-4">
-    <div class="card-header"><strong>🏆 Agent 绩效排名</strong></div>
+    <div class="card-header"><strong>🏆 VM 绩效排名</strong></div>
     <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>#</th>
-                    <th>Agent</th>
-                    <th>Owner</th>
-                    <th>完成任务数</th>
-                    <th>节省工时</th>
-                    <th>成功率</th>
-                    <th>平均响应</th>
-                    <th>Est. Value</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><span class="badge bg-warning text-dark">🥇</span></td>
-                    <td><code>vm-ymms-openclaw-07</code></td>
-                    <td>Zhang Lei</td>
-                    <td>3,421</td>
-                    <td>128h</td>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height:8px;">
-                                <div class="progress-bar bg-success" style="width:96%;"></div>
-                            </div>
-                            <small>96%</small>
-                        </div>
-                    </td>
-                    <td>2.3s</td>
-                    <td><strong class="text-success">¥48K</strong></td>
-                </tr>
-                <tr>
-                    <td><span class="badge bg-secondary">🥈</span></td>
-                    <td><code>vm-ymms-openclaw-08</code></td>
-                    <td>Wang Yan</td>
-                    <td>2,876</td>
-                    <td>102h</td>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height:8px;">
-                                <div class="progress-bar bg-success" style="width:94%;"></div>
-                            </div>
-                            <small>94%</small>
-                        </div>
-                    </td>
-                    <td>1.8s</td>
-                    <td><strong class="text-success">¥41K</strong></td>
-                </tr>
-                <tr>
-                    <td><span class="badge bg-warning text-dark" style="opacity:0.6">🥉</span></td>
-                    <td><code>vm-ymms-openclaw-03</code></td>
-                    <td>Li Min</td>
-                    <td>2,102</td>
-                    <td>87h</td>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height:8px;">
-                                <div class="progress-bar bg-warning" style="width:88%;"></div>
-                            </div>
-                            <small>88%</small>
-                        </div>
-                    </td>
-                    <td>3.1s</td>
-                    <td><strong class="text-success">¥32K</strong></td>
-                </tr>
-                <tr>
-                    <td>4</td>
-                    <td><code>vm-ymms-openclaw-02</code></td>
-                    <td>Chen Wei</td>
-                    <td>1,654</td>
-                    <td>65h</td>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height:8px;">
-                                <div class="progress-bar bg-success" style="width:92%;"></div>
-                            </div>
-                            <small>92%</small>
-                        </div>
-                    </td>
-                    <td>2.7s</td>
-                    <td><strong class="text-success">¥25K</strong></td>
-                </tr>
-            </tbody>
-        </table>
+        @if (Model.VmPerformances.Count == 0)
+        {
+            <div class="text-muted text-center py-3">暂无 VM 绩效数据</div>
+        }
+        else
+        {
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>VM</th>
+                        <th class="text-end">会话</th>
+                        <th class="text-end">消息</th>
+                        <th class="text-end">工具调用</th>
+                        <th>成功率</th>
+                        <th class="text-end">平均延迟</th>
+                        <th class="text-end">Token</th>
+                        <th class="text-end">费用</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        var rank = 0;
+                        var medals = new[] { "🥇", "🥈", "🥉" };
+                    }
+                    @foreach (var vm in Model.VmPerformances)
+                    {
+                        rank++;
+                        <tr>
+                            <td>
+                                @if (rank <= 3)
+                                {
+                                    <span class="badge bg-warning text-dark">@medals[rank - 1]</span>
+                                }
+                                else
+                                {
+                                    @rank
+                                }
+                            </td>
+                            <td><code>@vm.VmName</code></td>
+                            <td class="text-end">@vm.SessionCount</td>
+                            <td class="text-end">@vm.TotalMessages.ToString("N0")</td>
+                            <td class="text-end">@vm.ToolCalls.ToString("N0")</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height:8px;">
+                                        <div class="progress-bar @(vm.SuccessRate >= 95 ? "bg-success" : vm.SuccessRate >= 85 ? "bg-warning" : "bg-danger")"
+                                             style="width:@vm.SuccessRate.ToString("F0")%;"></div>
+                                    </div>
+                                    <small>@vm.SuccessRate.ToString("F0")%</small>
+                                </div>
+                            </td>
+                            <td class="text-end">@vm.FormattedLatency</td>
+                            <td class="text-end">@FormatTokens(vm.TotalTokens)</td>
+                            <td class="text-end">$@vm.TotalCost.ToString("F3")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     </div>
 </div>
 
-<!-- ROI Calculation -->
+<!-- ROI + Business KPI (static demo) -->
 <div class="row">
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header"><strong>💰 ROI 计算总结</strong></div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>💰 ROI 计算总结</strong>
+                <span class="badge bg-secondary">示例数据</span>
+            </div>
             <div class="card-body">
                 <table class="table table-sm mb-0">
                     <tbody>
@@ -333,7 +293,10 @@
     </div>
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header"><strong>📋 业务 KPI 影响</strong></div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>📋 业务 KPI 影响</strong>
+                <span class="badge bg-secondary">示例数据</span>
+            </div>
             <div class="card-body">
                 <div class="mb-3">
                     <div class="d-flex justify-content-between mb-1">
@@ -384,3 +347,25 @@
         </div>
     </div>
 </div>
+
+@functions {
+    static string FormatTokens(long tokens)
+    {
+        return tokens switch
+        {
+            >= 1_000_000 => $"{tokens / 1_000_000.0:F1}M",
+            >= 1_000 => $"{tokens / 1_000.0:F1}K",
+            _ => tokens.ToString("N0"),
+        };
+    }
+
+    static string FormatLatency(double ms)
+    {
+        return ms switch
+        {
+            >= 1000 => $"{ms / 1000:F1}s",
+            > 0 => $"{ms:F0}ms",
+            _ => "—",
+        };
+    }
+}
